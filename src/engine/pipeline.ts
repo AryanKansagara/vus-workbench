@@ -105,8 +105,8 @@ export function evaluate(an: Analysed, cur: Curation | undefined, gene: GeneCfg,
 }
 
 /** Evaluates a whole worklist. Phase partners are classified in a first pass without phase evidence, so PM3/BP2 never feed back on themselves. */
-export function evaluateAll(list: Analysed[], cur: Record<string, Curation>, genes: Record<string, GeneCfg>): Evaluated[] {
-  const cfg = (g: string) => genes[g] ?? DEFAULT_GENE
+export function evaluateAll(list: Analysed[], cur: Record<string, Curation>, genes: Record<string, GeneCfg>, fallback: GeneCfg = DEFAULT_GENE): Evaluated[] {
+  const cfg = (g: string) => genes[g] ?? fallback
   const first = list.map(an => evaluate(an, cur[an.rec.id], cfg(an.gene)))
   const byGene = new Map<string, Evaluated[]>()
   for (const e of first) {

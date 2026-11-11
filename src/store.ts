@@ -1,56 +1,37 @@
 import { useSyncExternalStore } from 'react'
-import type { Note } from './engine/commentary.ts'
-import type { Config, Dataset } from './engine/types.ts'
+import type { ClassName, GeneCfg } from './engine/acmg.ts'
+import type { LabRow, VariantRec } from './engine/io.ts'
+import type { Curation } from './engine/pipeline.ts'
+import type { Genome, Transcript } from './engine/transcript.ts'
 
-export interface ImportMeta {
-  id: string
-  kind: 'actuals' | 'budget' | 'mapping' | 'tb'
-  fileName: string
-  format: string
-  rows: number
-  issues: number
-  periods: string[]
-  at: number
-}
+export interface ImportMeta { id: string; kind: string; fileName: string; rows: number; issues: number; at: number }
 
-export type CheckStatus = 'open' | 'in-progress' | 'done' | 'n/a'
-export interface CheckItem { status: CheckStatus; owner: string }
-
-export interface SnapRow { account: string; name: string; section: string; kind: 'revenue' | 'expense'; actual: number; budget: number; variance: number; pct: number | null; flagged: boolean; favourable: boolean; note?: string }
-export interface Snapshot {
-  id: string
-  period: string
-  label: string
-  createdAt: number
-  rows: SnapRow[]
-  netIncome: { actual: number; budget: number }
-  approved: number
-  flagged: number
-}
+export interface SnapRow { key: string; label: string; cls: ClassName; points: number; criteria: string[] }
+export interface Snapshot { id: string; label: string; createdAt: number; rows: SnapRow[] }
 
 export interface Project {
   id: string
   name: string
   createdAt: number
   updatedAt: number
-  config: Config
-  /** The close period being worked. */
-  period: string | null
-  /** Commentary keyed by `${period}|${account}`. */
-  notes: Record<string, Note>
-  /** Flux checklist keyed by `${period}|${account}`. */
-  checklist: Record<string, CheckItem>
+  variants: VariantRec[]
+  labRows: LabRow[]
+  /** Imported GTF/GFF3 models; the bundled synthetic models are always available. */
+  transcripts: Transcript[]
+  /** Imported reference regions (FASTA from samtools faidx). */
+  genome: Genome
+  genes: Record<string, GeneCfg>
+  curation: Record<string, Curation>
   snapshots: Snapshot[]
   imports: ImportMeta[]
-  /** Built-in synthetic company; its ledger is regenerated instead of stored. */
   sampleId?: string
-  /** True when this device has no copy of the ledger (synced from another device). */
-  dataMissing?: boolean
+  /** Set when the cloud copy was trimmed for size and this device lacks the full variant list. */
+  partial?: boolean
 }
 
 // ---------- Tiny IndexedDB wrapper (falls back to memory in private modes) ----------
 
-const DB = 'variance-pack'
+const DB = 'vus-workbench'
 let dbp: Promise<IDBDatabase | null> | null = null
 function db(): Promise<IDBDatabase | null> {
   return dbp ??= new Promise(res => {
@@ -79,9 +60,6 @@ async function tx<T>(store: 'projects' | 'data', mode: IDBTransactionMode, fn: (
 
 async function idbGetAll<T>(store: 'projects'): Promise<T[]> {
   try { return await tx(store, 'readonly', s => s.getAll()) as T[] } catch { return [...mem[store].values()] as T[] }
-}
-async function idbGet<T>(store: 'projects' | 'data', key: string): Promise<T | undefined> {
-  try { return await tx(store, 'readonly', s => s.get(key)) as T | undefined } catch { return mem[store].get(key) as T | undefined }
 }
 async function idbPut(store: 'projects' | 'data', value: unknown, key?: string) {
   try { await tx(store, 'readwrite', s => key === undefined ? s.put(value) : s.put(value, key)) } catch { mem[store].set(key ?? (value as { id: string }).id, value) }
@@ -125,30 +103,24 @@ export async function saveProject(p: Project, opts: { touch?: boolean; silent?: 
   return next
 }
 
-/** Deletes locally; returns an undo function that restores the project and its data. */
+/** Deletes locally; returns an undo function that restores the project. */
 export async function deleteProject(id: string): Promise<() => Promise<void>> {
   const p = getProject(id)
-  const data = await idbGet<Dataset>('data', id)
   projects = projects.filter(x => x.id !== id)
   emit()
   await idbDel('projects', id)
-  await idbDel('data', id)
   addTombstone(id)
   return async () => {
     if (!p) return
     removeTombstone(id)
-    if (data) await idbPut('data', data, id)
     await saveProject(p)
   }
 }
 
-export const getData = (id: string) => idbGet<Dataset>('data', id)
-export const putData = (id: string, ds: Dataset) => idbPut('data', ds, id)
-
 export const uuid = () => crypto.randomUUID()
 
 // Tombstones keep a project deleted offline from coming back on the next sync.
-const TOMB = 'variance-pack.tombstones'
+const TOMB = 'vus-workbench.tombstones'
 export const tombstones = (): string[] => { try { return JSON.parse(localStorage.getItem(TOMB) ?? '[]') } catch { return [] } }
 const addTombstone = (id: string) => localStorage.setItem(TOMB, JSON.stringify([...new Set([...tombstones(), id])]))
 const removeTombstone = (id: string) => localStorage.setItem(TOMB, JSON.stringify(tombstones().filter(x => x !== id)))
@@ -156,15 +128,16 @@ export const clearTombstones = (ids: string[]) => localStorage.setItem(TOMB, JSO
 
 // ---------- App defaults (settings page) ----------
 
-export interface Defaults { abs: number; pct: number; basis: Config['basis']; reportingCurrency: string; preparer: string }
-const DEF_KEY = 'variance-pack.defaults'
-const BASE_DEFAULTS: Defaults = { abs: 10000, pct: 0.1, basis: 'budget', reportingCurrency: 'USD', preparer: '' }
+export interface Defaults { editor: string; institution: string; inheritance: GeneCfg['inheritance']; pm2Max: number; bs1Min: number; ba1Min: number }
+const DEF_KEY = 'vus-workbench.defaults'
+const BASE_DEFAULTS: Defaults = { editor: '', institution: '', inheritance: 'AD', pm2Max: 0.0001, bs1Min: 0.01, ba1Min: 0.05 }
 export function getDefaults(): Defaults {
   try { return { ...BASE_DEFAULTS, ...JSON.parse(localStorage.getItem(DEF_KEY) ?? '{}') } } catch { return BASE_DEFAULTS }
 }
 export const setDefaults = (d: Defaults) => localStorage.setItem(DEF_KEY, JSON.stringify(d))
-
-export function blankConfig(): Config {
+export const resetDefaults = () => localStorage.removeItem(DEF_KEY)
+export const editorName = () => getDefaults().editor.trim() || 'Unnamed curator'
+export function defaultGene(): GeneCfg {
   const d = getDefaults()
-  return { mapping: [], entities: [], reportingCurrency: d.reportingCurrency, thresholds: { abs: d.abs, pct: d.pct }, basis: d.basis }
+  return { inheritance: d.inheritance, lofMechanism: true, pm2Max: d.pm2Max, bs1Min: d.bs1Min, ba1Min: d.ba1Min }
 }

@@ -1,11 +1,10 @@
 // Optional cloud sync. Local-first: everything works signed out; signing in merges projects by id, last write wins.
 import { useSyncExternalStore } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { clearTombstones, getData, getProjects, loadProjects, onProjectChange, putData, saveProject, tombstones, type Project, type Snapshot } from './store.ts'
-import type { Dataset } from './engine/types.ts'
+import { clearTombstones, getProjects, loadProjects, onProjectChange, saveProject, tombstones, type Project, type Snapshot } from './store.ts'
 
-export const APP_ID = 'variance-pack'
-/** Ledgers above this stay on the device; mapping, commentary, checklist and snapshots always sync. */
+export const APP_ID = 'vus-workbench'
+/** Projects above this sync curated variants, lab calls, gene settings and models only; the full worklist and imported reference stay on the device. */
 export const RAW_SYNC_LIMIT = 1_500_000
 
 const URL_ = import.meta.env.VITE_SUPABASE_URL as string | undefined
@@ -92,7 +91,7 @@ function schedule() {
 }
 
 interface CloudRow { id: string; name: string; data: CloudData; updated_at: string; created_at: string }
-interface CloudData { project: Omit<Project, 'snapshots' | 'dataMissing'>; dataset?: Dataset }
+interface CloudData { project: Omit<Project, 'snapshots'> }
 
 let running: Promise<void> | null = null
 export function syncNow(): Promise<void> {
@@ -136,17 +135,15 @@ async function doSync() {
       const cvs = cloudVersions.get(id) ?? []
       const cloudTime = cp ? Date.parse(cp.updated_at) : 0
       if (lp && (!cp || lp.updatedAt > cloudTime)) {
-        const ds = lp.sampleId ? undefined : await getData(id)
-        const raw = ds ? JSON.stringify(ds) : ''
-        const { snapshots: _s, dataMissing: _m, ...meta } = lp
-        const payload: CloudData = { project: meta, ...(raw && raw.length <= RAW_SYNC_LIMIT ? { dataset: ds } : {}) }
+        const { snapshots: _s, ...meta } = lp
+        const payload: CloudData = { project: cloudCopy(meta) }
         const { error: e1 } = await c.from('projects').upsert({ id, app: APP_ID, name: lp.name, data: payload, updated_at: new Date(lp.updatedAt).toISOString() })
         if (e1) throw e1
       } else if (cp && (!lp || cloudTime > lp.updatedAt)) {
-        const { project, dataset } = cp.data
-        const hasLocal = !!(await getData(id))
-        if (dataset) await putData(id, dataset)
-        await saveProject({ ...project, id, name: cp.name, updatedAt: cloudTime, snapshots: lp?.snapshots ?? [], dataMissing: !project.sampleId && !dataset && !hasLocal }, { touch: false, silent: true })
+        const { project } = cp.data
+        // A trimmed cloud copy keeps this device's uncurated variants and imported reference.
+        const merged = project.partial && lp ? { ...project, variants: mergeById(lp.variants, project.variants), genome: { ...lp.genome, ...project.genome }, partial: false } : project
+        await saveProject({ ...merged, id, name: cp.name, updatedAt: cloudTime, snapshots: lp?.snapshots ?? [] }, { touch: false, silent: true })
       }
       // Snapshots: union by id in both directions.
       const now = getProjects().find(p => p.id === id)
@@ -157,13 +154,21 @@ async function doSync() {
         if (e2) throw e2
       }
       const missingDown = cvs.filter(v => !now.snapshots.some(s => s.id === v.id))
-      if (missingDown.length) await saveProject({ ...now, snapshots: [...now.snapshots, ...missingDown].sort((a, b) => a.period.localeCompare(b.period) || a.createdAt - b.createdAt) }, { touch: false, silent: true })
+      if (missingDown.length) await saveProject({ ...now, snapshots: [...now.snapshots, ...missingDown].sort((a, b) => a.createdAt - b.createdAt) }, { touch: false, silent: true })
     }
     set({ status: 'synced', lastSynced: Date.now() })
   } catch (e) {
     set({ status: navigator.onLine ? 'error' : 'offline', error: msg(e) })
   }
 }
+
+function cloudCopy(p: Omit<Project, 'snapshots'>): Omit<Project, 'snapshots'> {
+  if (JSON.stringify(p).length <= RAW_SYNC_LIMIT) return p
+  const curated = p.variants.filter(v => p.curation[v.id])
+  return { ...p, variants: curated, genome: {}, partial: true }
+}
+
+const mergeById = <T extends { id: string }>(a: T[], b: T[]) => { const m = new Map(a.map(x => [x.id, x])); for (const x of b) m.set(x.id, x); return [...m.values()] }
 
 export async function deleteSnapshotCloud(id: string) {
   if (!state.user) return
@@ -190,6 +195,6 @@ export async function deleteAccount() {
 
 export async function exportAll(): Promise<Blob> {
   await loadProjects()
-  const list = await Promise.all(getProjects().map(async p => ({ ...p, dataset: p.sampleId ? undefined : await getData(p.id) })))
+  const list = getProjects()
   return new Blob([JSON.stringify({ app: APP_ID, exportedAt: new Date().toISOString(), projects: list }, null, 1)], { type: 'application/json' })
 }

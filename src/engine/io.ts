@@ -24,12 +24,13 @@ export interface VariantRec {
   evidence: Evidence
 }
 
-export type FileKind = 'vcf' | 'variant-csv' | 'lab-csv' | 'gtf' | 'gff3' | 'unknown'
-export const FILE_KIND_LABEL: Record<FileKind, string> = { vcf: 'VCF', 'variant-csv': 'Variant list (HGVS)', 'lab-csv': 'Lab classification table', gtf: 'GTF transcript subset', gff3: 'GFF3 transcript subset', unknown: 'Unrecognised' }
+export type FileKind = 'vcf' | 'variant-csv' | 'lab-csv' | 'gtf' | 'gff3' | 'fasta' | 'unknown'
+export const FILE_KIND_LABEL: Record<FileKind, string> = { vcf: 'VCF', 'variant-csv': 'Variant list (HGVS)', 'lab-csv': 'Lab classification table', gtf: 'GTF transcript subset', gff3: 'GFF3 transcript subset', fasta: 'FASTA reference region', unknown: 'Unrecognised' }
 
 export function detectKind(text: string, name = ''): FileKind {
   const head = text.slice(0, 4000)
   if (/^##fileformat=VCF/m.test(head) || /^#CHROM\tPOS/m.test(head) || /\.vcf$/i.test(name)) return 'vcf'
+  if (/^>/.test(head) || /\.(fa|fasta)$/i.test(name)) return 'fasta'
   if (/^##gff-version\s*3/m.test(head) || /\.gff3?$/i.test(name)) return 'gff3'
   const firstData = head.split(/\r?\n/).find(l => l && !l.startsWith('#')) ?? ''
   const cols = firstData.split('\t')
@@ -156,7 +157,6 @@ export function parseVcf(text: string, file: string, genome: Genome, idGen: () =
         evidence: { popmaxAf: Number.isNaN(af) ? null : af, revel: Number.isNaN(revel) ? null : revel, spliceAi: Number.isNaN(sai) ? null : sai, functional: [] },
       }
       if (infoMap.GENE || infoMap.Gene || infoMap.SYMBOL) rec.gene = infoMap.GENE ?? infoMap.Gene ?? infoMap.SYMBOL
-      if (id && id !== '.') rec.sample = undefined
       if (filter && filter !== 'PASS' && filter !== '.') { rec.filter = filter; issues.push({ line: ln, level: 'warning', message: `FILTER is ${filter}; kept but flagged` }) }
       if (gtRaw) rec.gt = splitGt(gtRaw, ai + 1)
       if (ps && ps !== '.') rec.ps = ps
@@ -385,6 +385,35 @@ export function parseGtf(text: string, source: string): { transcripts: Transcrip
   }
   if (!transcripts.length) issues.push({ line: 0, level: 'error', message: 'No complete transcripts found (need exon and CDS rows with transcript_id or Parent)' })
   return { transcripts, issues }
+}
+
+// ---------- FASTA ----------
+
+/** Reads FASTA records. Headers like ">chr13:32315000-32400000" (samtools faidx output) set the start coordinate; plain ">chr13" starts at 1. */
+export function parseFasta(text: string): { genome: Genome; issues: Issue[] } {
+  const genome: Genome = {}
+  const issues: Issue[] = []
+  let cur: { chrom: string; start: number; parts: string[]; line: number } | null = null
+  const flush = () => {
+    if (!cur) return
+    const seq = cur.parts.join('').toUpperCase()
+    if (/[^ACGTN]/.test(seq)) issues.push({ line: cur.line, level: 'warning', message: `${cur.chrom}: IUPAC codes other than N were read as N` })
+    genome[cur.chrom] = { chrom: cur.chrom, start: cur.start, seq: seq.replace(/[^ACGTN]/g, 'N') }
+  }
+  text.split(/\r?\n/).forEach((l, i) => {
+    if (l.startsWith('>')) {
+      flush()
+      const h = l.slice(1).trim().split(/\s+/)[0]
+      const m = /^(.+):(\d+)-(\d+)$/.exec(h.replace(/,/g, ''))
+      cur = m ? { chrom: m[1], start: Number(m[2]), parts: [], line: i + 1 } : { chrom: h, start: 1, parts: [], line: i + 1 }
+    } else if (l.trim()) {
+      if (!cur) issues.push({ line: i + 1, level: 'error', message: 'Sequence before the first > header' })
+      else cur.parts.push(l.trim())
+    }
+  })
+  flush()
+  if (!Object.keys(genome).length) issues.push({ line: 1, level: 'error', message: 'No FASTA records found' })
+  return { genome, issues }
 }
 
 export { parseCsv }
