@@ -195,13 +195,13 @@ main:focus { outline: none; }
 .tr-exon .cds { fill: var(--teal); } .tr-exon .utr { fill: var(--teal); opacity: .45; }
 .tr-exon.hi .cds { fill: var(--ink); } [data-theme-mode='dark'] .tr-exon.hi .cds { fill: #5fe0d5; }
 .cds.schematic { fill: var(--teal); opacity: .6; }
-.tr-label { font: 500 11px var(--font-mono); fill: var(--muted); text-anchor: middle; }
-.tr-end { font: 500 12px var(--font-head); fill: var(--muted); }
+.tr-label { font: 500 17px var(--font-mono); fill: var(--muted); text-anchor: middle; }
+.tr-end { font: 500 18px var(--font-head); fill: var(--muted); }
 .tr-var { transition: transform .6s ease; }
 .tr-var line { stroke: var(--orange); stroke-width: 2; stroke-dasharray: 4 3; }
 .tr-var circle { fill: var(--orange); stroke: var(--bg); stroke-width: 3; }
 .track.animate .tr-var circle { animation: pulse 2.4s infinite; transform-box: fill-box; transform-origin: center; }
-.tr-var text { font: 600 13px var(--font-mono); fill: var(--orange); }
+.tr-var text { font: 600 20px var(--font-mono); fill: var(--orange); }
 .siteseq { font-family: var(--font-mono); display: grid; gap: 2px; }
 .siteseq div { display: flex; align-items: center; gap: 1px; }
 .siteseq small { width: 2.4rem; font-size: .66rem; color: var(--muted); }
@@ -217,7 +217,8 @@ main:focus { outline: none; }
 .hero-ring.r1 { width: 520px; height: 520px; left: -180px; bottom: -260px; animation: spin 90s linear infinite; }
 .hero-ring.r2 { width: 300px; height: 300px; right: 8%; top: -150px; border-color: rgba(255, 255, 255, .25); animation: spin 120s linear infinite reverse; }
 .hero-inner { position: relative; max-width: var(--maxw); margin: 0 auto; padding: clamp(2.5rem, 6vw, 5.5rem) 1.5rem; display: grid; grid-template-columns: 1fr 1.1fr; gap: 3rem; align-items: center; }
-.hero h1 { color: #fff; font-weight: 300; }
+.hero-inner > * { min-width: 0; }
+.hero h1 { color: #fff; font-weight: 300; overflow-wrap: break-word; }
 .lede { font-size: 1.12rem; color: #b9cfcd; max-width: 34rem; }
 .hero-note { margin-top: 1rem; font-size: .85rem; color: #8fb0ad; }
 .hero-card { background: rgba(255, 255, 255, .97); color: var(--text); border-radius: var(--r-xl); padding: 1.3rem 1.4rem 1rem; box-shadow: var(--shadow-strong); }
@@ -276,8 +277,8 @@ main:focus { outline: none; }
 
 /* ---------- Project ---------- */
 .proj-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; flex-wrap: wrap; }
-.proj-title { display: flex; align-items: center; gap: .6rem; margin: 0; }
-.proj-title input { font: inherit; color: inherit; border: 1px solid transparent; background: none; padding: 0 .3rem; margin-left: -.3rem; min-width: 0; width: min(36ch, 80vw); letter-spacing: inherit; }
+.proj-title { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem; margin: 0; font-size: clamp(1.6rem, 3vw, 2.4rem); }
+.proj-title input { font: inherit; color: inherit; border: 1px solid transparent; background: none; padding: 0 .3rem; margin-left: -.3rem; min-width: 0; width: min(36ch, 100%); flex: 1 1 18ch; letter-spacing: inherit; text-overflow: ellipsis; }
 .proj-title input:hover { border-color: var(--border); }
 .tabs { display: flex; gap: .2rem; border-bottom: 1px solid var(--border); margin: 1.4rem 0 1.4rem; overflow-x: auto; }
 .tabs a { padding: .6rem .9rem; text-decoration: none; color: var(--muted); font: 500 .92rem var(--font-head); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; display: flex; gap: .4rem; align-items: center; }
@@ -430,6 +431,10 @@ main:focus { outline: none; }
   .burger { display: inline-grid; }
   .hide-sm { display: none; }
   .hero { margin: .5rem; }
+  .hero-inner { padding: 2rem 1rem; gap: 2rem; }
+  .hero h1 { font-size: 2rem; }
+  .hero-card { padding: 1rem; }
+  .hero-card-head { flex-direction: column; gap: .4rem; }
   .flow, .features, .quotes { grid-template-columns: 1fr; }
   .docs { grid-template-columns: 1fr; }
   .docs-toc { position: static; display: flex; flex-wrap: wrap; gap: .4rem 1rem; }
@@ -440,4 +445,6 @@ main:focus { outline: none; }
   .proj-grid { grid-template-columns: 1fr; }
   .header-inner { gap: .6rem; }
   .brand span { font-size: 1rem; }
+  .crit-hint { display: none; }
+  .func-list li { grid-template-columns: 1fr auto; } .func-list .pill { grid-column: 1 / -1; justify-self: start; }
 }

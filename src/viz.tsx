@@ -50,8 +50,8 @@ export function Meter({ points, cls, compact }: { points: number; cls: ClassName
 interface TrackProps { tx: Transcript | null; ann: Annotation | null; gpos?: number | null; height?: number; animate?: boolean }
 
 /** Transcript drawn 5' to 3' with introns compressed; the variant is placed by its c. position. */
-export function Track({ tx, ann, gpos, height = 132, animate }: TrackProps) {
-  const W = 1000, PAD = 24, Y = height / 2
+export function Track({ tx, ann, gpos, height = 150, animate }: TrackProps) {
+  const W = 1000, PAD = 24, Y = height / 2 + 4
   if (!tx) return <SchematicTrack ann={ann} height={height} />
   const ex = txExons(tx)
   const lens = ex.map(e => e[1] - e[0] + 1)
@@ -98,12 +98,12 @@ export function Track({ tx, ann, gpos, height = 132, animate }: TrackProps) {
         return (
           <g key={b.i} className={`tr-exon${highlight === b.i + 1 ? ' hi' : ''}`}>
             {parts.map((p, k) => <rect key={k} x={p.x} y={Y - (p.coding ? exonH : utrH) / 2} width={Math.max(p.w, 1)} height={p.coding ? exonH : utrH} rx={p.coding ? 5 : 3} className={p.coding ? 'cds' : 'utr'} />)}
-            <text x={b.x + b.w / 2} y={Y + exonH / 2 + 16} className="tr-label">{b.i + 1}</text>
+            <text x={b.x + b.w / 2} y={Y + exonH / 2 + 20} className="tr-label">{b.i + 1}</text>
           </g>
         )
       })}
-      <text x={PAD} y={16} className="tr-end">5′ {tx.gene} · {tx.id} · {tx.strand === 1 ? '+' : '−'} strand</text>
-      <text x={W - PAD} y={16} className="tr-end" textAnchor="end">3′</text>
+      <text x={PAD} y={18} className="tr-end">5′ {tx.gene} · {tx.id} · {tx.strand === 1 ? '+' : '−'} strand</text>
+      <text x={W - PAD} y={18} className="tr-end" textAnchor="end">3′</text>
       {vx !== null && ann && (
         <g className="tr-var" style={{ transform: `translateX(${vx}px)` }}>
           <line x1={0} x2={0} y1={26} y2={height - 8} />

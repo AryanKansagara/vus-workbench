@@ -35,6 +35,8 @@ export default function VariantView({ project, evaluated, vid }: { project: Proj
       cur.overrides[code] = { ...base, ...patch, source: 'curator', editor: editorName(), at: Date.now() }
     }, true)
   const pv = a ? pvs1(a, gene) : null
+  const [all, setAll] = useState(false)
+  const showPartners = e.partners.some(p => p.phase !== 'unknown') || gene.inheritance === 'AR'
 
   return (
     <div className="variant">
@@ -117,7 +119,7 @@ export default function VariantView({ project, evaluated, vid }: { project: Proj
             <FunctionalForm onAdd={f => act('Functional evidence added', `${f.assay}${f.oddsPath !== null ? `, OddsPath ${f.oddsPath}` : ''}`, ({ rec }) => { rec.evidence.functional.push({ ...f, id: uuid(), editor: editorName(), at: Date.now() }) })} />
           </div>
 
-          {e.partners.length > 0 && (
+          {e.partners.length > 0 && showPartners && (
             <div className="card pad">
               <h3 className="h5">Other variants in {an.gene} ({an.rec.sample ?? 'same sample'})</h3>
               <ul className="plain">{e.partners.map(p => <li key={p.label}><span className={`phase ${p.phase}`}>{p.phase}</span> {p.label} <ClassBadge cls={p.cls} small /></li>)}</ul>
@@ -134,12 +136,12 @@ export default function VariantView({ project, evaluated, vid }: { project: Proj
             {result.excluded.map(x => <p key={x.code} className="small note">{x.code} not counted. {x.why}</p>)}
           </div>
           <div className="card pad">
-            <div className="row between"><h3 className="h5">Criteria</h3><span className="muted small">Engine suggestions in teal, your decisions in orange</span></div>
+            <div className="row between"><h3 className="h5">Criteria</h3><span className="muted small crit-hint">Engine suggestions in teal, your decisions in orange</span></div>
             {pv?.strength && <details className="pvs1"><summary>PVS1 decision path</summary><ol>{pv.path.map(s => <li key={s}>{s}</li>)}</ol></details>}
             {(['P', 'B'] as const).map(dir => (
               <div key={dir} className="crit-group">
                 <div className="crit-group-h">{dir === 'P' ? 'Pathogenic' : 'Benign'}</div>
-                {CRITERIA.filter(c => c.dir === dir).map(d => {
+                {CRITERIA.filter(c => c.dir === dir && (all || e.criteria.some(x => x.code === c.code))).map(d => {
                   const c = e.criteria.find(x => x.code === d.code)
                   const sug = e.suggestions.find(s => s.code === d.code)
                   const over = cur?.overrides[d.code]
@@ -166,6 +168,7 @@ export default function VariantView({ project, evaluated, vid }: { project: Proj
                 })}
               </div>
             ))}
+            <button type="button" className="btn ghost sm mt" onClick={() => setAll(x => !x)}>{all ? 'Show applied and suggested only' : `Show all ${CRITERIA.length} criteria to add one`}</button>
           </div>
           <div className="card pad">
             <label className="field"><span>Curator note</span><NoteBox value={cur?.note ?? ''} onCommit={t => act('Note', t.slice(0, 120) || 'cleared', ({ cur }) => { cur.note = t })} /></label>

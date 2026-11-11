@@ -20,7 +20,7 @@ interface Chip { code: string; strength: Strength; why: string }
 const CHIPS: Chip[] = [
   { code: 'PM2', strength: 'Supporting', why: 'Absent from the population database' },
   { code: 'PP3', strength: 'Supporting', why: `Donor ${HERO.splice?.canonical?.refScore} → ${HERO.splice?.canonical?.altScore} bits (local PWM)` },
-  { code: 'PS3', strength: 'Moderate', why: 'Minigene: exon 3 skipping, OddsPath 6.2' },
+  { code: 'PS3', strength: 'Strong', why: 'Minigene: exon 3 skipping, OddsPath 19.2' },
   { code: 'PP4', strength: 'Supporting', why: 'Phenotype specific for the gene' },
   { code: 'PP1', strength: 'Strong', why: 'Co-segregates across 7 meioses' },
   { code: 'BS3', strength: 'Strong', why: 'RNA from blood shows normal splicing' },

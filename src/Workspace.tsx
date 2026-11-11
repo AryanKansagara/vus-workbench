@@ -13,7 +13,12 @@ export default function Workspace() {
     const q = new URLSearchParams(location.search)
     if (q.get('import') === '1') { history.replaceState({}, '', '/app'); setNaming(true) }
     const s = q.get('sample'), tab = q.get('tab')
-    if (s && SAMPLES.some(x => x.id === s)) void createSampleProject(s).then(p => go(`/app/p/${p.id}${tab ? '/' + tab : ''}`, { replace: true }))
+    // Deep link into a sample variant, e.g. ?sample=synthetic-panel&variant=c.306%2B5G%3EA
+    const variant = q.get('variant')
+    if (s && SAMPLES.some(x => x.id === s)) void createSampleProject(s).then(p => {
+      const v = variant ? evaluateProject(p).find(e => e.an.ann?.hgvsC.endsWith(':' + variant)) : null
+      go(v ? `/app/p/${p.id}/v/${v.an.rec.id}` : `/app/p/${p.id}${tab ? '/' + tab : ''}`, { replace: true })
+    })
   }, [])
 
   const create = async (name: string) => {

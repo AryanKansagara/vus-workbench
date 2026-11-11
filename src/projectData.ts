@@ -100,8 +100,8 @@ export async function createSampleProject(sampleId: string): Promise<Project> {
     const o = (d: number, h = 10): CurateOpts => ({ at: t0 + d * DAY + h * 3600000, editor: SYN_CURATOR })
     const splice = find('c.306+5G>A')
     p = applyCuration(p, splice, 'Note', 'Proband phenotype consistent with SYNG1 disorder; requested RNA study.', ({ cur }) => { cur.note = 'Near-splice variant; local PWM predicts donor weakening. RNA from blood requested.' }, o(1))
-    p = applyCuration(p, splice, 'Functional evidence added', 'Minigene assay (synthetic): exon 3 skipping in 85% of transcripts, OddsPath 6.2', ({ rec }) => {
-      rec.evidence.functional.push({ id: uuid(), assay: 'Minigene splicing assay (synthetic result)', result: 'abnormal', oddsPath: 6.2, note: 'Exon 3 skipping in 85% of transcripts vs 0% wild type.', editor: SYN_CURATOR, at: o(21).at! })
+    p = applyCuration(p, splice, 'Functional evidence added', 'Minigene assay (synthetic): exon 3 skipping in 85% of transcripts, OddsPath 19.2', ({ rec }) => {
+      rec.evidence.functional.push({ id: uuid(), assay: 'Minigene splicing assay (synthetic result)', result: 'abnormal', oddsPath: 19.2, note: 'Exon 3 skipping in 85% of transcripts vs 0% wild type.', editor: SYN_CURATOR, at: o(21).at! })
     }, o(21))
     p = applyCuration(p, splice, 'Criterion added', 'PP4_Supporting: phenotype highly specific (synthetic case notes)', ({ cur }) => {
       cur.overrides.PP4 = { code: 'PP4', met: true, strength: 'Supporting', evidence: 'Phenotype highly specific for SYNG1 disorder (synthetic case notes).', source: 'curator', editor: SYN_CURATOR, at: o(22).at! }

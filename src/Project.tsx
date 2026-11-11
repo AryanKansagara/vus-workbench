@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { CLASSES, CLASS_SHORT, critLabel, fmtAf, vusTier, type ClassName } from './engine/acmg.ts'
 import { phaseOf, type Evaluated } from './engine/pipeline.ts'
 import { CONSEQUENCE_LABEL } from './engine/transcript.ts'
-import { curatedCsv, snapshotOf, useProject, worklistCsv } from './projectData.ts'
+import { curatedCsv, geneCfg, snapshotOf, useProject, worklistCsv } from './projectData.ts'
 import { getDefaults, saveProject, type Project } from './store.ts'
 import { download, Empty, go, isTyping, Link, slug, SyntheticBadge, toast } from './ui.tsx'
 import { ClassBadge } from './viz.tsx'
@@ -74,7 +74,7 @@ function Worklist({ project, evaluated }: { project: Project; evaluated: Evaluat
     (status === 'all' || (project.curation[e.an.rec.id]?.status ?? 'new') === status) &&
     (!q || `${e.an.label} ${e.an.rec.key} ${e.an.ann ? CONSEQUENCE_LABEL[e.an.ann.consequence] : ''}`.toLowerCase().includes(q.toLowerCase())))
     .sort((a, b) => CLASSES.indexOf(b.result.cls) - CLASSES.indexOf(a.result.cls) || b.result.points - a.result.points)
-  const pairs = usePairs(evaluated)
+  const pairs = usePairs(evaluated).filter(p => p.phase !== 'unknown' || geneCfg(project, p.gene).inheritance === 'AR')
 
   if (!evaluated.length) return (
     <Empty title="No variants yet">

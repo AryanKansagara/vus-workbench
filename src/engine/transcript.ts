@@ -215,7 +215,7 @@ export function proteinEffect(t: Transcript, g: Genome, v: GVariant): ProteinEff
   const [x, y] = t.strand === 1 ? [ta, tb] : [tb, ta]
   const altO = t.strand === 1 ? alt : revcomp(alt)
   const edited = ref ? m.slice(0, x - 1) + altO + m.slice(y) : m.slice(0, x) + altO + m.slice(x)
-  if (y < cds.start || x > cds.end) return { hgvsP: 'p.(=)' }
+  if (y < cds.start || x > cds.end) return null
   if (x < cds.start + 3 && y >= cds.start) return { hgvsP: 'p.(Met1?)' }
   const refP = translate(m.slice(cds.start - 1, cds.end), false)
   const altP = translate(edited.slice(cds.start - 1), true)
