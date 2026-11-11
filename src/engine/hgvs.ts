@@ -21,7 +21,7 @@ export function parseC(raw: string): HgvsC | null {
   const swapped = s.replace(/^([A-Za-z0-9-]+)\((N[MR]_[\d.]+|ENST[\d.]+)\):/, '$2($1):')
   const m = RE_C.exec(swapped)
   if (!m) return null
-  let transcript = m[1], gene = m[2]
+  let transcript: string | undefined = m[1], gene: string | undefined = m[2]
   if (transcript && !/^(N[MR]_|ENST|X[MR]_|LRG_|SYN)/i.test(transcript) && !gene) { gene = transcript; transcript = undefined }
   const start = cpos(m[3], m[4], m[5], m[6])
   const end = m[8] ? cpos(m[7], m[8], m[9], m[10]) : undefined
