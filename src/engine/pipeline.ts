@@ -72,7 +72,7 @@ export function analyse(rec: VariantRec, txs: Transcript[], genome: Genome): Ana
     const h = parseC(`${rec.transcript ?? rec.gene}:${rec.hgvsC}`)
     if (h) ann = annotateHgvs({ ...h, ...(rec.gene ? { gene: rec.gene } : {}) }, rec.hgvsP)
   }
-  if (!ann && !problems.length) problems.push(rec.g ? 'Outside every loaded transcript model. Import a GTF subset for this gene to annotate it.' : 'Could not annotate this variant.')
+  if (!ann && !problems.length) problems.push(rec.g ? 'No transcript model covers this position. Load the gene on the Genes tab (Ensembl, GRCh38) or import a GTF subset.' : 'Could not annotate this variant.')
   const splice = tx && g && ann && hasReference(genome, tx) ? spliceReport(tx, genome, g) : null
   const gene = tx?.gene ?? rec.gene ?? '—'
   const label = ann ? `${gene} ${ann.hgvsC.replace(/^.*:/, '')}${ann.hgvsP ? ' ' + ann.hgvsP : ''}` : rec.key

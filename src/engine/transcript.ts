@@ -323,7 +323,7 @@ export function annotateHgvs(h: HgvsC, hgvsP?: string): Annotation {
   if (off) a.intronOffset = off
   if (p?.kind === 'nonsense' && p.pos) a.ptcAa = p.pos
   if (p?.kind === 'frameshift' && p.pos && p.fsTer) a.ptcAa = p.pos + p.fsTer - 1
-  notes.push('No transcript model loaded for this gene: exon structure, NMD and splice-strength are not computed. Import a GTF subset to enable them.')
+  notes.push('No transcript model loaded for this gene: exon structure, NMD and splice-strength are not computed. Load the gene on the Genes tab (Ensembl, GRCh38) or import a GTF subset to enable them.')
   return a
 }
 

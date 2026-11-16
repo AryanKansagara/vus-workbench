@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CRITERIA, DEF, fmtAf, pvs1, STRENGTH_SHORT, STRENGTHS, type CriterionState, type Strength } from './engine/acmg.ts'
+import { CRITERIA, DEF, fmtAf, fmtPosterior, pvs1, STRENGTH_SHORT, STRENGTHS, type CriterionState, type Strength } from './engine/acmg.ts'
 import type { Evaluated } from './engine/pipeline.ts'
 import { CONSEQUENCE_LABEL } from './engine/transcript.ts'
 import { curate, geneCfg } from './projectData.ts'
@@ -133,7 +133,9 @@ export default function VariantView({ project, evaluated, vid }: { project: Proj
             <div className="row between"><ClassBadge cls={result.cls} points={result.points} /><span className="mono big">{result.points > 0 ? '+' : ''}{result.points} pts</span></div>
             <Meter points={result.points} cls={result.cls} />
             {result.standAloneBenign && <p className="small note">BA1 is stand-alone: Benign regardless of other criteria.</p>}
+            <p className="small muted" title="Prior 0.10, odds of pathogenicity 350 for very strong evidence (Tavtigian et al. 2018)">Posterior probability of pathogenicity {fmtPosterior(result.points)}</p>
             {result.excluded.map(x => <p key={x.code} className="small note">{x.code} not counted. {x.why}</p>)}
+            {result.notes.map(n => <p key={n} className="small note">{n}</p>)}
           </div>
           <div className="card pad">
             <div className="row between"><h3 className="h5">Criteria</h3><span className="muted small crit-hint">Engine suggestions in teal, your decisions in orange</span></div>

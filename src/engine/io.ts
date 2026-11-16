@@ -1,6 +1,6 @@
 // Importers: VCF 4.x, CSV/TSV variant lists (HGVS), lab classification tables, GTF/GFF3 transcript subsets.
 import { norm, parseCsv, parseNum } from './csv.ts'
-import { formatP, parseC, parseP } from './hgvs.ts'
+import { formatC, formatP, parseC, parseP } from './hgvs.ts'
 import { parseClass, parseCriteria, type Applied, type ClassName, type Evidence } from './acmg.ts'
 import { refAt, sameChrom, type Genome, type GVariant, type Transcript } from './transcript.ts'
 
@@ -70,6 +70,25 @@ export function normalize(g: Genome, v: GVariant): GVariant & { leftAligned: boo
   while (ref.length > 1 && alt.length > 1 && ref[0] === alt[0]) { ref = ref.slice(1); alt = alt.slice(1); pos++ }
   return { chrom: v.chrom, pos, ref, alt, leftAligned }
 }
+
+/**
+ * Every name a variant can be recognised by: its key, and gene plus canonical c. description
+ * ("c.5266dupC" and "c.5266dup" are one variant), so a VCF record and an HGVS row do not become two entries.
+ */
+export function identities(v: VariantRec): string[] {
+  const h = v.hgvsC ? parseC(v.hgvsC) : null
+  return [v.key, ...(v.gene && h ? [`${v.gene}:${formatC(h, false)}`] : [])]
+}
+
+/** Identity to the samples it has been seen in ("" when the source had no sample, such as a reference list). */
+export function variantIndex(list: VariantRec[]): Map<string, Set<string>> {
+  const ix = new Map<string, Set<string>>()
+  for (const v of list) for (const k of identities(v)) ix.set(k, (ix.get(k) ?? new Set()).add(v.sample ?? ''))
+  return ix
+}
+
+/** Already present when the same variant exists for the same sample, or either side carries no sample. */
+export const inIndex = (ix: Map<string, Set<string>>, v: VariantRec) => identities(v).some(k => { const s = ix.get(k); return !!s && (!v.sample || s.has(v.sample) || s.has('')) })
 
 export const gKey = (v: GVariant) => `${v.chrom.replace(/^chr/i, '')}:${v.pos}:${v.ref}:${v.alt}`
 

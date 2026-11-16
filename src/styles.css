@@ -436,7 +436,7 @@ main:focus { outline: none; }
   .hero-card { padding: 1rem; }
   .hero-card-head { flex-direction: column; gap: .4rem; }
   .flow, .features, .quotes { grid-template-columns: 1fr; }
-  .docs { grid-template-columns: 1fr; }
+  .docs { grid-template-columns: minmax(0, 1fr); }
   .docs-toc { position: static; display: flex; flex-wrap: wrap; gap: .4rem 1rem; }
   .chips { grid-template-columns: 1fr 1fr; }
   .crit-row { grid-template-columns: 5rem 1fr; }
@@ -448,3 +448,8 @@ main:focus { outline: none; }
   .crit-hint { display: none; }
   .func-list li { grid-template-columns: 1fr auto; } .func-list .pill { grid-column: 1 / -1; justify-self: start; }
 }
+
+.fetch-model { margin: .6rem 0 .4rem; align-items: center; }
+.fetch-model input { flex: 1 1 12rem; max-width: 18rem; min-height: 36px; }
+.proj-head > div:first-child { flex: 1 1 24rem; min-width: 0; }
+.docs-body .mono { overflow-wrap: anywhere; }

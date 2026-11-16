@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { autoMap, detectKind, FILE_KIND_LABEL, LAB_FIELDS, parseCsv, parseFasta, parseGtf, parseVcf, validateLabCsv, validateVariantCsv, VARIANT_FIELDS, type FieldSpec, type FileKind, type Issue, type LabRow, type Mapping, type VariantRec } from './engine/io.ts'
+import { autoMap, detectKind, FILE_KIND_LABEL, inIndex, variantIndex, LAB_FIELDS, parseCsv, parseFasta, parseGtf, parseVcf, validateLabCsv, validateVariantCsv, VARIANT_FIELDS, type FieldSpec, type FileKind, type Issue, type LabRow, type Mapping, type VariantRec } from './engine/io.ts'
 import type { Genome, Transcript } from './engine/transcript.ts'
 import { LAB_CSV, REAL_VARIANTS_CSV, SAMPLE_GTF, sampleVcf } from './engine/sample.ts'
 import { context, evaluateProject, snapshotOf } from './projectData.ts'
@@ -40,7 +40,7 @@ export default function ImportTab({ project }: { project: Project }) {
       >
         <div className="drop-ring" aria-hidden="true" />
         <h2 className="h4">Drop files here</h2>
-        <p className="muted">VCF 4.x · CSV/TSV variant list with HGVS c. · lab classification table · GTF/GFF3 transcript subset · FASTA region. Several at once is fine.</p>
+        <p className="muted">VCF 4.x (plain, VEP or SnpEff annotated, ClinVar) · CSV/TSV variant list with HGVS c. · ClinVar tabular download · lab classification table · GTF/GFF3 transcript subset · FASTA region. Several at once is fine.</p>
         <div className="row gap center-x wrap">
           <button type="button" className="btn primary" onClick={() => input.current?.click()}>Choose files</button>
           <Link href="/docs" className="btn ghost">How to export them</Link>
@@ -69,10 +69,10 @@ export default function ImportTab({ project }: { project: Project }) {
       {project.imports.length > 0 && (
         <div className="card pad">
           <h3 className="h5">Import history</h3>
-          <table className="tbl small">
+          <div className="table-wrap"><table className="tbl small">
             <thead><tr><th>File</th><th>Type</th><th className="num">Records</th><th className="num">Issues</th><th>When</th></tr></thead>
             <tbody>{[...project.imports].reverse().map(i => <tr key={i.id}><td>{i.fileName}</td><td>{FILE_KIND_LABEL[i.kind as FileKind] ?? i.kind}</td><td className="num">{i.rows}</td><td className="num">{i.issues}</td><td>{new Date(i.at).toLocaleString('en-GB')}</td></tr>)}</tbody>
-          </table>
+          </table></div>
         </div>
       )}
     </div>
@@ -85,13 +85,13 @@ function PendingFile({ p, project, onMap, onDone }: { p: Pending; project: Proje
   const [showAll, setShowAll] = useState(false)
   const parsed: Parsed = useMemo(() => {
     const g = context(project).genome
-    if (p.kind === 'vcf') { const r = parseVcf(p.text, p.name, g, uuid); return { variants: r.variants, issues: r.issues, total: r.records } }
+    if (p.kind === 'vcf') { const r = parseVcf(p.text, p.name, g, uuid); return { variants: r.variants, labRows: r.labRows.length ? r.labRows : undefined, issues: r.issues, total: r.records } }
     if (p.kind === 'gtf' || p.kind === 'gff3') { const r = parseGtf(p.text, p.name); return { transcripts: r.transcripts, issues: r.issues, total: r.transcripts.length } }
     if (p.kind === 'fasta') { const r = parseFasta(p.text); return { genome: r.genome, issues: r.issues, total: Object.keys(r.genome).length } }
     const csv = parseCsv(p.text)
     if (p.kind === 'lab-csv') { const r = validateLabCsv(csv, p.map, p.name, uuid); return { labRows: r.rows, issues: r.issues, total: r.total, headers: csv.rows[0] } }
     const r = validateVariantCsv(csv, p.map, p.name, g, uuid)
-    return { variants: r.variants, issues: r.issues, total: r.total, headers: csv.rows[0] }
+    return { variants: r.variants, labRows: r.labRows.length ? r.labRows : undefined, issues: r.issues, total: r.total, headers: csv.rows[0] }
   }, [p, project.genome, project.transcripts])
   const errors = parsed.issues.filter(i => i.level === 'error').length
   const ok = (parsed.variants?.length ?? parsed.labRows?.length ?? parsed.transcripts?.length ?? Object.keys(parsed.genome ?? {}).length) || 0
@@ -101,8 +101,9 @@ function PendingFile({ p, project, onMap, onDone }: { p: Pending; project: Proje
     let next: Project = { ...project }
     let msg = ''
     if (parsed.variants) {
-      const have = new Set(project.variants.map(v => v.key + (v.sample ?? '')))
-      const fresh = parsed.variants.filter(v => !have.has(v.key + (v.sample ?? '')))
+      // The same variant can arrive as a VCF record and as an HGVS description; either identity counts as already present.
+      const have = variantIndex(project.variants)
+      const fresh = parsed.variants.filter(v => !inIndex(have, v))
       next.variants = [...project.variants, ...fresh]
       msg = `Added ${fresh.length} variants${fresh.length < parsed.variants.length ? `, ${parsed.variants.length - fresh.length} already in the worklist` : ''}`
     }
@@ -111,7 +112,7 @@ function PendingFile({ p, project, onMap, onDone }: { p: Pending; project: Proje
       const have = new Set(project.labRows.map(sig))
       const fresh = parsed.labRows.filter(r => !have.has(sig(r)))
       next.labRows = [...project.labRows, ...fresh]
-      msg = `Added ${fresh.length} lab calls`
+      msg = msg ? `${msg} and ${fresh.length} classifications for the lab comparison` : `Added ${fresh.length} lab calls`
     }
     if (parsed.transcripts) {
       next.transcripts = [...project.transcripts.filter(t => !parsed.transcripts!.some(n => n.id === t.id)), ...parsed.transcripts]
@@ -127,7 +128,7 @@ function PendingFile({ p, project, onMap, onDone }: { p: Pending; project: Proje
     onDone()
     toast(msg, { tone: 'ok' })
     if (parsed.variants) go(`/app/p/${project.id}`)
-    if (parsed.labRows) go(`/app/p/${project.id}/labs`)
+    else if (parsed.labRows) go(`/app/p/${project.id}/labs`)
   }
 
   const shownIssues = showAll ? parsed.issues : parsed.issues.slice(0, 12)

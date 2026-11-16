@@ -56,14 +56,23 @@ function summarize(calls: LabCall[], diffs: CriterionDiff[], sev: Severity): str
   if (calls.length < 2) return `Only one lab (${calls[0].lab}) has classified this variant.`
   const parts: string[] = []
   if (sev === 'concordant') parts.push(`All ${calls.length} labs agree: ${calls[0].cls}.`)
-  else parts.push(calls.map(c => `${c.lab}: ${c.cls}`).join('; ') + '.')
+  else if (calls.length > 6) {
+    // Too many labs to name each one (a ClinVar record can have fifty): count by class, name the outliers.
+    const by = CLASSES.map(k => [k, calls.filter(c => c.cls === k)] as const).filter(([, l]) => l.length).sort((a, b) => b[1].length - a[1].length)
+    parts.push(`${calls.length} labs: ${by.map(([k, l]) => `${l.length} ${k}`).join(', ')}.`)
+    const few = by.filter(([, l]) => l.length <= 2 && l.length < by[0][1].length).flatMap(([k, l]) => l.map(c => `${c.lab} (${k}${c.date ? `, ${c.date.slice(0, 4)}` : ''})`))
+    if (few.length && few.length <= 4) parts.push(`Outliers: ${few.join('; ')}.`)
+  } else parts.push(calls.map(c => `${c.lab}: ${c.cls}`).join('; ') + '.')
   const mis = calls.filter(c => c.mismatch)
   for (const c of mis) parts.push(`${c.lab}'s own criteria total ${c.points} points (${c.implied}), not ${c.cls}.`)
   if (diffs.length) {
     const top = diffs.slice(0, 3).map(d => {
       const have = Object.entries(d.byLab).filter(([, s]) => s).map(([l, s]) => `${l} ${critLabel({ code: d.code, strength: s! })}`)
-      const lack = Object.entries(d.byLab).filter(([, s]) => !s).map(([l]) => l)
-      return `${d.code} (${have.join(', ')}${lack.length ? `; not used by ${lack.join(', ')}` : ''})`
+      // Only labs that stated criteria can be said not to have used one.
+      const stated = new Set(calls.filter(c => c.criteria.length).map(c => c.lab))
+      const lack = Object.entries(d.byLab).filter(([l, s]) => !s && stated.has(l)).map(([l]) => l)
+      const list = (x: string[]) => x.length > 3 ? `${x.slice(0, 2).join(', ')} and ${x.length - 2} more` : x.join(', ')
+      return `${d.code} (${list(have)}${lack.length ? `; not used by ${list(lack)}` : ''})`
     })
     parts.push(`Largest evidence differences: ${top.join('; ')}.`)
   }

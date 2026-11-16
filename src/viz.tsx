@@ -125,7 +125,7 @@ function SchematicTrack({ ann, height }: { ann: Annotation | null; height: numbe
       <line x1={60} x2={940} y1={Y} y2={Y} className="tr-intron" />
       <rect x={140} y={Y - 15} width={260} height={30} rx={5} className="cds schematic" />
       <rect x={600} y={Y - 15} width={260} height={30} rx={5} className="cds schematic" />
-      <text x={500} y={18} textAnchor="middle" className="tr-end">Schematic only. Import a GTF subset to draw the real exon structure.</text>
+      <text x={500} y={18} textAnchor="middle" className="tr-end">Schematic only. Load the gene on the Genes tab to draw the real exon structure.</text>
       {ann && <g className="tr-var" style={{ transform: `translateX(${vx}px)` }}><line x1={0} x2={0} y1={26} y2={height - 8} /><circle cx={0} cy={Y} r={7} /><text x={0} y={height - 2} textAnchor="middle">{ann.hgvsC.replace(/^.*:/, '')}</text></g>}
     </svg>
   )

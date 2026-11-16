@@ -1,7 +1,9 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { fmtAf, type GeneCfg } from './engine/acmg.ts'
 import type { Evaluated } from './engine/pipeline.ts'
-import { cdsBounds } from './engine/transcript.ts'
+import { fetchGeneModel, FLANK } from './engine/ensembl.ts'
+import { cdsBounds, hasReference } from './engine/transcript.ts'
+import { evaluateProject, snapshotOf } from './projectData.ts'
 import { context, geneCfg } from './projectData.ts'
 import { saveProject, type Project } from './store.ts'
 import { Link, toast } from './ui.tsx'
@@ -16,6 +18,28 @@ export default function Genes({ project, evaluated }: { project: Project; evalua
     const n = Number(raw)
     if (raw === '' || Number.isNaN(n) || n < 0 || n > 1) { toast('Frequencies must be between 0 and 1.', { tone: 'error' }); return }
     set(g, { [k]: n })
+  }
+  const [busy, setBusy] = useState<string | null>(null)
+  const [symbol, setSymbol] = useState('')
+  // Genes in the worklist with no model yet (synthetic genes are bundled).
+  const missing = genes.filter(g => !ctx.txs.some(t => t.gene === g))
+  const load = async (list: string[]) => {
+    let next = project
+    const done: string[] = []
+    for (const g of list) {
+      setBusy(g)
+      try {
+        const m = await fetchGeneModel(g)
+        next = { ...next, transcripts: [...next.transcripts.filter(t => t.id !== m.transcript.id), m.transcript], genome: { ...next.genome, [m.key]: m.region } }
+        done.push(`${m.transcript.gene} ${m.transcript.id}`)
+      } catch (e) { toast(`${g}: ${e instanceof Error ? e.message : 'could not be loaded'}`, { tone: 'error' }) }
+    }
+    setBusy(null)
+    if (!done.length) return
+    next = { ...next, snapshots: [...next.snapshots, snapshotOf(evaluateProject(next), `After loading ${done.join(', ')}`)] }
+    await saveProject(next)
+    setSymbol('')
+    toast(`Loaded ${done.join(', ')} with reference sequence. The worklist was re-annotated.`, { tone: 'ok' })
   }
   return (
     <div className="stack">
@@ -46,6 +70,12 @@ export default function Genes({ project, evaluated }: { project: Project; evalua
 
       <div className="card pad">
         <div className="row between wrap"><h3 className="h5">Transcript models</h3><Link href={`/app/p/${project.id}/import`} className="btn ghost sm">Import GTF / GFF3</Link></div>
+        <form className="row gap-sm wrap fetch-model" onSubmit={e => { e.preventDefault(); if (symbol.trim()) void load([symbol.trim().toUpperCase()]) }}>
+          <input aria-label="Gene symbol" placeholder="Gene symbol, e.g. BRCA2" value={symbol} onChange={e => setSymbol(e.target.value)} disabled={!!busy} />
+          <button type="submit" className="btn primary sm" disabled={!!busy || !symbol.trim()}>{busy && !missing.includes(busy) ? `Loading ${busy}…` : 'Load from Ensembl'}</button>
+          {missing.length > 0 && <button type="button" className="btn ghost sm" disabled={!!busy} onClick={() => void load(missing.slice(0, 12))}>{busy && missing.includes(busy) ? `Loading ${busy}…` : `Load ${missing.length > 12 ? 'first 12 of ' : ''}${missing.length} worklist gene${missing.length === 1 ? '' : 's'} without a model`}</button>}
+        </form>
+        <p className="muted small">Loads the MANE Select transcript and the GRCh38 sequence under it from the public Ensembl REST API. Only the gene symbol is sent. Coordinates must be GRCh38; for GRCh37 data import your own GTF and FASTA.</p>
         <div className="table-wrap">
           <table className="tbl">
             <thead><tr><th>Transcript</th><th>Gene</th><th>Contig</th><th>Strand</th><th className="num">Exons</th><th className="num">Protein</th><th>Reference</th><th>Source</th><th /></tr></thead>
@@ -55,15 +85,15 @@ export default function Genes({ project, evaluated }: { project: Project; evalua
                 <tr key={t.id}>
                   <td className="mono">{t.id}</td><td>{t.gene}</td><td className="mono">{t.chrom}</td><td>{t.strand === 1 ? '+' : '−'}</td><td className="num">{t.exons.length}</td>
                   <td className="num">{Number.isInteger(cdsBounds(t).aaLength) ? `${cdsBounds(t).aaLength} aa` : '?'}</td>
-                  <td>{Object.keys(ctx.genome).some(k => k.replace(/^chr/i, '') === t.chrom.replace(/^chr/i, '')) ? 'loaded' : <span className="muted">not loaded</span>}</td>
+                  <td>{hasReference(ctx.genome, t) ? 'loaded' : <span className="muted">not loaded</span>}</td>
                   <td className="small">{t.synthetic ? 'Bundled synthetic' : t.source}</td>
-                  <td>{imported && <button type="button" className="btn danger-ghost sm" onClick={() => { const prev = project; void saveProject({ ...project, transcripts: project.transcripts.filter(x => x.id !== t.id) }).then(() => toast(`Removed ${t.id}.`, { undo: () => void saveProject(prev) })) }}>Remove</button>}</td>
+                  <td>{imported && <button type="button" className="btn danger-ghost sm" onClick={() => { const prev = project; void saveProject({ ...project, transcripts: project.transcripts.filter(x => x.id !== t.id), genome: Object.fromEntries(Object.entries(project.genome).filter(([k]) => k !== `${t.chrom}:${t.exons[0][0] - FLANK}-${t.exons[t.exons.length - 1][1] + FLANK}`)) }).then(() => toast(`Removed ${t.id}.`, { undo: () => void saveProject(prev) })) }}>Remove</button>}</td>
                 </tr>
               )
             })}</tbody>
           </table>
         </div>
-        <p className="muted small">Genes without a model are annotated from HGVS alone: position class and type, but no exon structure, NMD or splice scoring. Add a GTF subset and a FASTA region (see <Link href="/docs#models">Docs</Link>) to enable them.</p>
+        <p className="muted small">Genes without a model are annotated from HGVS alone: position class and type, but no exon structure, NMD or splice scoring. Load the gene from Ensembl above, or add a GTF subset and a FASTA region (see <Link href="/docs#models">Docs</Link>), to enable them.</p>
       </div>
     </div>
   )

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { formatC, formatP, lengthChange, parseC, parseP } from './hgvs.ts'
 import { revcomp, translate } from './seq.ts'
 import { annotate, annotateHgvs, cdsBounds, cToG, gToC, gToHgvsC, hasReference, hgvsCToG, proteinEffect, refAt, type Genome, type GVariant, type Transcript } from './transcript.ts'
-import { autoMap, detectKind, labVariantKey, LAB_FIELDS, normalize, parseCsv, parseFasta, parseGtf, parseVcf, spliceAiMax, splitGt, validateLabCsv, validateVariantCsv, VARIANT_FIELDS, type VariantRec } from './io.ts'
+import { autoMap, detectKind, identities, inIndex, labVariantKey, LAB_FIELDS, normalize, parseCsv, parseFasta, parseGtf, parseVcf, spliceAiMax, splitGt, validateLabCsv, validateVariantCsv, VARIANT_FIELDS, variantIndex, type VariantRec } from './io.ts'
 import { classify, combine, DEFAULT_GENE, EMPTY_EVIDENCE, oddsPathStrength, parseClass, parseCriteria, posterior, pvs1, revelStrength, suggest, vusTier, type Applied, type Strength } from './acmg.ts'
 import { readFileSync } from 'node:fs'
 import { clinvarLabRows, clinvarTerms, criteriaFromComment, parseVcvXml, titleMatches } from './clinvar.ts'
@@ -565,4 +565,17 @@ test('ClinVar tabular download layout: Name becomes HGVS c. and p., classificati
     ['BRCA2:c.9976A>T', 'ClinVar (reviewed by expert panel)', 'Benign'], ['BRCA1:c.5266dup', 'ClinVar (reviewed by expert panel)', 'Pathogenic'], ['CFTR:c.1521_1523del', 'ClinVar (practice guideline)', 'Pathogenic'],
   ])
   assert.ok(r.issues.some(i => i.line === 3 && /Conflicting classifications/.test(i.message)))
+})
+
+test('one variant, one worklist entry: a VCF record and an HGVS row share an identity', () => {
+  const vcf = parseVcf(fixture('snpeff-ann-excerpt.vcf'), 'a.vcf', {}, id).variants
+  const csv = parseCsv(fixture('clinvar-result-excerpt.txt'))
+  const list = validateVariantCsv(csv, autoMap(csv.rows[0], VARIANT_FIELDS), 'b.txt', G, id).variants
+  const have = variantIndex(vcf)
+  // BRCA2 c.9976A>T, BRCA1 c.5266dup (written c.5266dupC by SnpEff) and CFTR c.1521_1523del are already there; c.7522G>A is new.
+  assert.deepEqual(list.filter(v => !inIndex(have, v)).map(v => v.hgvsC), ['c.7522G>A'])
+  assert.deepEqual(identities(vcf[1]), ['17:43057062:T:TG', 'BRCA1:c.5266dup'])
+  // Another sample carrying the same variant keeps its own entry; the same sample does not.
+  assert.ok(!inIndex(have, { ...list[0], sample: 'CASE-2' }))
+  assert.ok(inIndex(have, { ...list[0], sample: 'SAMPLE1' }))
 })

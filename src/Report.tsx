@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { critLabel, fmtAf, STRENGTH_SHORT, vusTier } from './engine/acmg.ts'
+import { critLabel, fmtAf, fmtPosterior, STRENGTH_SHORT, vusTier } from './engine/acmg.ts'
 import type { Evaluated } from './engine/pipeline.ts'
 import { CONSEQUENCE_LABEL } from './engine/transcript.ts'
 import { useProject } from './projectData.ts'
@@ -43,7 +43,7 @@ function VariantSheet({ e, project }: { e: Evaluated; project: Project }) {
       <h1 className="sheet-title">{an.gene} <span className="mono">{a?.hgvsC ?? an.rec.key}</span> {a?.hgvsP && <span className="mono">{a.hgvsP}</span>}</h1>
       <div className="sheet-grid">
         <dl className="facts">
-          <div><dt>Classification</dt><dd><ClassBadge cls={result.cls} points={result.points} /> {result.points} points{result.cls === 'VUS' ? ` (${vusTier(result.points)})` : ''}</dd></div>
+          <div><dt>Classification</dt><dd><ClassBadge cls={result.cls} points={result.points} /> {result.points} points{result.cls === 'VUS' ? ` (${vusTier(result.points)})` : ''}, posterior probability {fmtPosterior(result.points)}</dd></div>
           {a && <div><dt>Consequence</dt><dd>{CONSEQUENCE_LABEL[a.consequence]}{a.spliceRegion ? ', splice region' : ''}{a.exon ? `, exon ${a.exon}` : a.intron ? `, intron ${a.intron}` : ''}</dd></div>}
           {an.g && <div><dt>Genomic</dt><dd className="mono">{an.g.chrom}:{an.g.pos} {an.g.ref}&gt;{an.g.alt}</dd></div>}
           {an.rec.gt && <div><dt>Genotype</dt><dd>{an.rec.gt}{an.rec.sample ? ` (${an.rec.sample})` : ''}</dd></div>}
@@ -66,6 +66,7 @@ function VariantSheet({ e, project }: { e: Evaluated; project: Project }) {
         </tbody>
       </table>
       {result.excluded.map(x => <p key={x.code} className="small">{x.code}: {x.why}</p>)}
+      {result.notes.map(n => <p key={n} className="small">{n}</p>)}
       {ev.functional.length > 0 && (<><h2 className="h5">Functional evidence</h2><ul className="small">{ev.functional.map(f => <li key={f.id}>{f.result === 'abnormal' ? 'Damaging' : 'Normal'}: {f.assay}{f.oddsPath !== null ? `, OddsPath ${f.oddsPath}` : ''}. {f.note} ({f.editor}, {fmtDate(f.at)})</li>)}</ul></>)}
       {cur?.note && <><h2 className="h5">Curator note</h2><p className="small">{cur.note}</p></>}
       {cur?.history.length ? (<><h2 className="h5">Classification history</h2><ul className="small">{cur.history.map((h, i) => <li key={i}>{fmtDate(h.at)}: {h.from ? `${h.from} → ` : ''}{h.to} ({h.points} points). {h.reason} [{h.editor}]</li>)}</ul></>) : null}

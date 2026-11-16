@@ -248,6 +248,9 @@ export function suggest(a: Annotation, ev: Evidence, gene: GeneCfg, splice: Spli
   return out
 }
 
+/** Posterior as a percentage, with enough digits to tell 99.4% from 99.97%. */
+export const fmtPosterior = (points: number) => { const p = posterior(points) * 100; return `${p >= 99 ? Math.min(99.99, +p.toFixed(2)) : p < 1 ? +p.toPrecision(2) : +p.toFixed(1)}%` }
+
 export const fmtAf = (x: number) => x === 0 ? '0' : x >= 0.001 ? String(+x.toPrecision(3)) : x.toExponential(1)
 
 // ---------- Curation state ----------
