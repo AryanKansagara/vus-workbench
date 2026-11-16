@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+                        
+<ClinVarResult-Set><VariationArchive VariationID="38266" VariationName="NM_000059.4(BRCA2):c.9976A&gt;T (p.Lys3326Ter)" VariationType="single nucleotide variant" Accession="VCV000038266" Version="143" RecordType="classified" NumberOfSubmissions="53" NumberOfSubmitters="51" DateLastUpdated="2026-11-07" DateCreated="2013-04-12" MostRecentSubmission="2026-11-07">
+  <RecordStatus>current</RecordStatus>
+  <Species>Homo sapiens</Species>
+  <ClassifiedRecord>
+<SimpleAllele AlleleID="46822" VariationID="38266"><GeneList><Gene Symbol="BRCA2" FullName="BRCA2 DNA repair associated" GeneID="675" HGNC_ID="HGNC:1101" Source="submitted" RelationshipType="within single gene"></Gene></GeneList></SimpleAllele>
+<Classifications>
+      <GermlineClassification DateLastEvaluated="2024-06-11" NumberOfSubmissions="53" NumberOfSubmitters="51" DateCreated="2013-04-12" MostRecentSubmission="2026-11-07">
+        <ReviewStatus>reviewed by expert panel</ReviewStatus>
+        <Description>Benign</Description>
+        <Explanation DataSource="ClinVar" Type="public">Benign (1)</Explanation>
+        </GermlineClassification>
+    </Classifications>
+<ClinicalAssertionList>
+<ClinicalAssertion ID="583462" SubmissionDate="2016-04-28" ContributesToAggregateClassification="false" DateLastUpdated="2016-10-02" DateCreated="2016-10-02">
+        <ClinVarSubmissionID localKey="NM_000059.3:c.9976A&gt;T|NOT SPECIFIED" submittedAssembly="GRCh37"/>
+        <ClinVarAccession Accession="SCV000301783" DateUpdated="2016-10-02" DateCreated="2016-10-02" Type="SCV" Version="1" SubmitterName="PreventionGenetics, part of Exact Sciences" OrgID="239772" OrganizationCategory="laboratory"/>
+        <RecordStatus>current</RecordStatus>
+        <Classification>
+          <ReviewStatus>criteria provided, single submitter</ReviewStatus>
+          <GermlineClassification>Benign</GermlineClassification>
+        </Classification>
+        <Assertion>variation to disease</Assertion>
+        <AttributeSet>
+          <Attribute Type="AssertionMethod">ACMG Guidelines, 2015</Attribute>
+          </AttributeSet>
+        <SimpleAllele>
+          <VariantType>Variation</VariantType>
+          <AttributeSet>
+            <Attribute Type="HGVS">NM_000059.3:c.9976A&gt;T</Attribute>
+          </AttributeSet>
+        </SimpleAllele>
+      </ClinicalAssertion>
+<ClinicalAssertion FDARecognizedDatabase="true" ID="7681136" SubmissionDate="2024-06-11" ContributesToAggregateClassification="true" DateLastUpdated="2024-06-17" DateCreated="2023-11-11">
+        <ClinVarSubmissionID localKey="d7eeea50-bae6-4d66-8a75-a47e13cc51e6" localKeyIsSubmitted="1" submittedAssembly="GRCh38"/>
+        <ClinVarAccession Accession="SCV004101446" DateUpdated="2024-06-17" DateCreated="2023-11-11" Type="SCV" Version="3" SubmitterName="ClinGen ENIGMA BRCA1 and BRCA2 Variant Curation Expert Panel, ClinGen" OrgID="509268" OrganizationCategory="consortium"/>
+        <RecordStatus>current</RecordStatus>
+        <Classification DateLastEvaluated="2024-06-11">
+          <ReviewStatus>reviewed by expert panel</ReviewStatus>
+          <GermlineClassification>Benign</GermlineClassification>
+          <Comment>The c.9976A&gt;T variant in BRCA2 is predicted to cause a change in the length of the protein due to the insertion of a terminating codon instead of the usual Lysine at amino acid 3326 (p.Lys3326Ter). The highest non-cancer, non-founder population filter allele frequency in gnomAD v2.1 (exomes only, non-cancer subset, read depth &gt;=20) or gnomAD v3.1 (non-cancer subset, read depth &gt;=20) is 0.00813 in the European (non-Finnish) population, which is above the ENIGMA BRCA1/2 VCEP threshold (&gt;0.001) for BA1 (BA1 met). Nonsense variant predicted to cause a premature stop codon that is predicted to escape nonsense mediated decay, and lead to truncation of a region with unknown protein function (sequence up to BRCA2:p.Glu3309 is maintained) (PVS1 not met). Reported by one calibrated study to exhibit protein function similar to benign control variants (PMID: 29988080) (BS3 met). Multifactorial likelihood ratio analysis using clinically calibrated data produced a combined LR for this variant of 3.09E-263 (based on Cosegregation LR=0.001; Pathology LR=1.864E-35; Co-occurrence LR=0.0001; Case-Control LR=1.66E-221), below the threshold for Very strong benign evidence (LR &lt;0.00285) (BP5_Very strong met; PMID: 18451181, Internal lab contributor). In summary, this variant meets the criteria to be classified as a Benign variant for BRCA2-related cancer predisposition based on the ACMG/AMP criteria applied as specified by the ENIGMA BRCA1/2 VCEP (BA1, BS3, BP5_Very strong).</Comment>
+        </Classification>
+        <Assertion>variation to disease</Assertion>
+        <AttributeSet>
+          <Attribute Type="ModeOfInheritance">Autosomal dominant inheritance</Attribute>
+        </AttributeSet>
+        <AttributeSet>
+          <Attribute Type="AssertionMethod">CSpec BRCA1/2ACMG Rules Specifications V1.0</Attribute>
+          </AttributeSet>
+        <SimpleAllele>
+          <GeneList>
+            <Gene Symbol="BRCA2"/>
+          </GeneList>
+          <VariantType>Variation</VariantType>
+          <OtherNameList>
+            <Name>NM_000059.4(BRCA2):c.9976A&gt;T</Name>
+            <Name>p.Lys3326Ter</Name>
+          </OtherNameList>
+          <AttributeSet>
+            <Attribute Type="HGVS">NC_000013.11:g.32398489A&gt;T</Attribute>
+          </AttributeSet>
+        </SimpleAllele>
+      </ClinicalAssertion>
+<ClinicalAssertion ID="12612868" SubmissionDate="2025-10-02" ContributesToAggregateClassification="false" DateLastUpdated="2025-10-05" DateCreated="2025-10-05">
+        <ClinVarSubmissionID localKey="SHC1305|MedGen:C0027672"/>
+        <ClinVarAccession Accession="SCV006550732" DateUpdated="2025-10-05" DateCreated="2025-10-05" Type="SCV" Version="1" SubmitterName="Laboratorio de I+D, Fundación Centro Médico de Asturias" OrgID="507259" OrganizationCategory="other" OrgAbbreviation="LMM-IMOMA"/>
+        <AdditionalSubmitters>
+          <SubmitterDescription OrgID="509743" SubmitterName="SpadaHC, Centro de Investigación Biomédica en Red Cáncer (CIBERONC)" Type="behalf" OrganizationCategory="consortium"/>
+        </AdditionalSubmitters>
+        <RecordStatus>current</RecordStatus>
+        <Classification DateLastEvaluated="2025-07-09">
+          <ReviewStatus>criteria provided, single submitter</ReviewStatus>
+          <GermlineClassification>Likely benign</GermlineClassification>
+          <Comment Type="public">BS1+BS2+PVS1_Moderate</Comment>
+        </Classification>
+        <Assertion>variation to disease</Assertion>
+        <AttributeSet>
+          <Attribute Type="AssertionMethod">ACMG Guidelines, 2015</Attribute>
+          </AttributeSet>
+        <SimpleAllele>
+          <VariantType>Variation</VariantType>
+          <Location>
+            <SequenceLocation Assembly="GRCh37" Chr="13" alternateAllele="T" referenceAllele="A" start="32972626" stop="32972626"/>
+          </Location>
+          <OtherNameList>
+            <Name Type="SubmitterVariantId">SHC1305</Name>
+          </OtherNameList>
+        </SimpleAllele>
+      </ClinicalAssertion>
+<ClinicalAssertion ID="3969393" SubmissionDate="2022-04-26" ContributesToAggregateClassification="false" DateLastUpdated="2022-04-23" DateCreated="2022-04-23">
+        <ClinVarSubmissionID localKey="NM_000059.4:c.9976A&gt;T|MedGen:C0677776" submittedAssembly="GRCh38"/>
+        <ClinVarAccession Accession="SCV002025886" DateUpdated="2022-04-23" DateCreated="2022-04-23" Type="SCV" Version="2" SubmitterName="National Health Laboratory Service, Universitas Academic Hospital and University of the Free State" OrgID="507969" OrganizationCategory="laboratory" OrgAbbreviation="NHLS"/>
+        <RecordStatus>current</RecordStatus>
+        <Classification DateLastEvaluated="2022-04-19">
+          <ReviewStatus>flagged submission</ReviewStatus>
+          <GermlineClassification>Uncertain significance</GermlineClassification>
+        </Classification>
+        <Assertion>variation to disease</Assertion>
+        <AttributeSet>
+          <Attribute Type="AssertionMethod">ACMG Guidelines, 2015</Attribute>
+          </AttributeSet>
+        <SimpleAllele>
+          <GeneList>
+            <Gene Symbol="BRCA2"/>
+          </GeneList>
+          <VariantType>Variation</VariantType>
+          <Location>
+            <GeneLocation>NM_000059.4:exon 27</GeneLocation>
+          </Location>
+          <OtherNameList>
+            <Name>NP_000050.3:p.Lys3326Ter</Name>
+          </OtherNameList>
+          <XRefList>
+            <XRef DB="dbSNP" ID="11571833" Type="rsNumber"/>
+          </XRefList>
+          <AttributeSet>
+            <Attribute Type="HGVS">NM_000059.4:c.9976A&gt;T</Attribute>
+          </AttributeSet>
+        </SimpleAllele>
+        <Comment DataSource="ClinGen" Type="FlaggedComment">Notes: None</Comment>
+        <Comment DataSource="ClinGen" Type="FlaggedComment">Reason: Outlier claim with insufficient supporting evidence</Comment>
+      </ClinicalAssertion>
+<ClinicalAssertion ID="281495" SubmissionDate="2014-05-29" ContributesToAggregateClassification="false" DateLastUpdated="2014-06-09" DateCreated="2014-06-09">
+        <ClinVarSubmissionID localKey="MedGen:CN169374"/>
+        <ClinVarAccession Accession="SCV000084526" DateUpdated="2014-06-09" DateCreated="2014-06-09" Type="SCV" Version="1" SubmitterName="ITMI" OrgID="504914" OrganizationCategory="laboratory"/>
+        <RecordStatus>current</RecordStatus>
+        <Classification DateLastEvaluated="2013-09-19">
+          <ReviewStatus>no classification provided</ReviewStatus>
+          <GermlineClassification>not provided</GermlineClassification>
+        </Classification>
+        <Assertion>variation to disease</Assertion>
+        <SimpleAllele>
+          <VariantType>Variation</VariantType>
+          <Location>
+            <SequenceLocation Assembly="GRCh37" Chr="13" alternateAllele="T" referenceAllele="A" start="32972626" stop="32972626" variantLength="1"/>
+          </Location>
+        </SimpleAllele>
+        <Comment>Please see associated publication for description of ethnicities</Comment>
+      </ClinicalAssertion>
+<ClinicalAssertion ID="1518394" SubmissionDate="2018-03-09" ContributesToAggregateClassification="false" DateLastUpdated="2017-03-08" DateCreated="2017-03-08">
+        <ClinVarSubmissionID localKey="NM_000059.3:c.9976A&gt;T|not provided" submittedAssembly="GRCh37"/>
+        <ClinVarAccession Accession="SCV000778727" DateUpdated="2017-03-08" DateCreated="2017-03-08" Type="SCV" Version="1" SubmitterName="Mayo Clinic Laboratories, Mayo Clinic" OrgID="500068" OrganizationCategory="laboratory" OrgAbbreviation="MCL"/>
+        <RecordStatus>current</RecordStatus>
+        <Classification DateLastEvaluated="2017-02-02">
+          <ReviewStatus>no assertion criteria provided</ReviewStatus>
+          <GermlineClassification>Likely benign</GermlineClassification>
+        </Classification>
+        <Assertion>variation to disease</Assertion>
+        <SimpleAllele>
+          <GeneList>
+            <Gene Symbol="BRCA2"/>
+          </GeneList>
+          <VariantType>Variation</VariantType>
+          <AttributeSet>
+            <Attribute Type="HGVS">NM_000059.3:c.9976A&gt;T</Attribute>
+          </AttributeSet>
+        </SimpleAllele>
+      </ClinicalAssertion>
+</ClinicalAssertionList>
+</ClassifiedRecord></VariationArchive></ClinVarResult-Set>

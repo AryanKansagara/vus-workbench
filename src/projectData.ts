@@ -122,8 +122,8 @@ export async function createSampleProject(sampleId: string): Promise<Project> {
     p.snapshots = [snapshotOf(evaluateProject(p), 'Initial import', t0)]
     const find = (c: string) => p.variants.find(x => x.hgvsC === c)!.id
     const o = (d: number): CurateOpts => ({ at: t0 + d * DAY, editor: SYN_CURATOR })
-    p = applyCuration(p, find('c.5266dup'), 'Strength changed', 'PVS1 to Very strong: PTC at codon 1829 lies in exon 20 of 24, well upstream of the last junction (transcript review)', ({ cur }) => {
-      cur.overrides.PVS1 = { code: 'PVS1', met: true, strength: 'VeryStrong', evidence: 'PTC at codon 1829 is in exon 20 of 24; predicted NMD (manual transcript review; no model loaded).', source: 'curator', editor: SYN_CURATOR, at: o(2).at! }
+    p = applyCuration(p, find('c.5266dup'), 'Note', 'PVS1 reviewed: the stop at codon 1829 falls in the last exon, so NMD is not expected, but the truncation removes the end of the BRCT domain (aa 1650-1857)', ({ cur }) => {
+      cur.note = 'PVS1 kept at Strong: last-exon stop (predicted NMD escape) that truncates the BRCT domain.'
     }, o(2))
     p = applyCuration(p, find('c.5266dup'), 'Criterion added', 'PS4_Moderate from case-control data (illustrative)', ({ cur }) => {
       cur.overrides.PS4 = { code: 'PS4', met: true, strength: 'Moderate', evidence: 'Enriched in cases vs controls (illustrative value for the sample).', source: 'curator', editor: SYN_CURATOR, at: o(2).at! }

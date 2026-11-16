@@ -1,8 +1,8 @@
 // Importers: VCF 4.x, CSV/TSV variant lists (HGVS), lab classification tables, GTF/GFF3 transcript subsets.
 import { norm, parseCsv, parseNum } from './csv.ts'
-import { parseC, parseP } from './hgvs.ts'
+import { formatP, parseC, parseP } from './hgvs.ts'
 import { parseClass, parseCriteria, type Applied, type ClassName, type Evidence } from './acmg.ts'
-import { refAt, type Genome, type GVariant, type Transcript } from './transcript.ts'
+import { refAt, sameChrom, type Genome, type GVariant, type Transcript } from './transcript.ts'
 
 export interface Issue { line: number; level: 'error' | 'warning' | 'info'; message: string }
 
@@ -38,28 +38,31 @@ export function detectKind(text: string, name = ''): FileKind {
   if (cols.length === 9 && /^\d+$/.test(cols[3]) && /(ID|Parent)=/.test(cols[8])) return 'gff3'
   const hdr = new Set(parseCsv(firstData || head.split(/\r?\n/)[0]).rows[0]?.map(norm) ?? [])
   if ([...hdr].some(h => LAB_FIELDS[1].aliases.includes(h)) && [...hdr].some(h => LAB_FIELDS[2].aliases.includes(h))) return 'lab-csv'
-  if ([...hdr].some(h => /hgvs|c_dot|cdna|variant|^pos/.test(h))) return 'variant-csv'
+  if ([...hdr].some(h => /hgvs|c_dot|cdna|variant|^pos|^name$/.test(h))) return 'variant-csv'
   return 'unknown'
 }
 
-const sameChrom = (a: string, b: string) => a.replace(/^chr/i, '') === b.replace(/^chr/i, '')
-export const findContig = (g: Genome, chrom: string) => Object.keys(g).find(k => sameChrom(k, chrom))
+/** The contig name the loaded reference uses for this chromosome (with or without "chr"), if any region of it is loaded. */
+export const findContig = (g: Genome, chrom: string) => Object.values(g).find(r => sameChrom(r.chrom, chrom))?.chrom
 
 // ---------- Normalisation ----------
 
 /** Left-aligns and trims a VCF-style variant (Tan et al. 2015). Without reference sequence only trimming is possible. */
 export function normalize(g: Genome, v: GVariant): GVariant & { leftAligned: boolean } {
   let { pos, ref, alt } = v
-  const contig = findContig(g, v.chrom)
+  // Left-alignment needs reference bases around this position, not just somewhere on the chromosome.
+  const contig = refAt(g, v.chrom, v.pos, 1) !== null ? v.chrom : undefined
   let leftAligned = !!contig
   for (let guard = 0; guard < 100000; guard++) {
     let changed = false
+    const before = { ref, alt }
     if (ref.length && alt.length && ref[ref.length - 1] === alt[alt.length - 1] && (contig || (ref.length > 1 && alt.length > 1))) {
       ref = ref.slice(0, -1); alt = alt.slice(0, -1); changed = true
     }
     if (!ref.length || !alt.length) {
       const b = contig ? refAt(g, contig, pos - 1, 1) : null
-      if (!b) { leftAligned = false; break }
+      // Ran off the loaded region: keep the last valid representation.
+      if (!b) { ({ ref, alt } = before); leftAligned = false; break }
       ref = b + ref; alt = b + alt; pos--; changed = true
     }
     if (!changed) break
@@ -72,9 +75,65 @@ export const gKey = (v: GVariant) => `${v.chrom.replace(/^chr/i, '')}:${v.pos}:$
 
 // ---------- VCF ----------
 
-export interface VcfResult { variants: VariantRec[]; issues: Issue[]; samples: string[]; records: number; meta: { fileformat?: string; info: string[]; contigs: string[] } }
+export interface VcfResult { variants: VariantRec[]; labRows: LabRow[]; issues: Issue[]; samples: string[]; records: number; meta: { fileformat?: string; info: string[]; contigs: string[]; annotation?: 'VEP CSQ' | 'SnpEff ANN' | 'ClinVar' } }
 
-const AF_KEYS = ['AF_popmax', 'AF_grpmax', 'popmax_AF', 'gnomAD_AF_popmax', 'gnomADe_AF', 'gnomADg_AF', 'gnomAD_AF', 'AF']
+const AF_KEYS = ['AF_popmax', 'AF_grpmax', 'popmax_AF', 'gnomAD_AF_popmax', 'MAX_AF', 'gnomADe_AF', 'gnomADg_AF', 'gnomAD_AF', 'AF']
+
+/** SnpEff ANN sub-fields are fixed by the annotation standard (Cingolani et al., VCF annotation format 1.0). */
+const ANN_FIELDS = ['Allele', 'Annotation', 'Annotation_Impact', 'Gene_Name', 'Gene_ID', 'Feature_Type', 'Feature_ID', 'Transcript_BioType', 'Rank', 'HGVS.c', 'HGVS.p']
+
+interface TxAnnotation { gene?: string; transcript?: string; hgvsC?: string; hgvsP?: string; af?: number; revel?: number; spliceAi?: number }
+
+const pct = (s: string) => { try { return decodeURIComponent(s) } catch { return s } }
+const maxOf = (vals: (string | undefined)[]) => { const n = vals.flatMap(v => (v ?? '').split('&')).filter(v => v.trim() !== '').map(Number).filter(x => !Number.isNaN(x) && x >= 0); return n.length ? Math.max(...n) : undefined }
+
+/**
+ * Picks one transcript annotation for an ALT allele from VEP's CSQ (field order from the header) or SnpEff's ANN.
+ * Preference: MANE Select, then VEP canonical, then the first coding entry with an HGVS c. description.
+ */
+export function pickAnnotation(raw: string, fields: string[], alt: string, alleleNum: number, nAlts: number): TxAnnotation | null {
+  const ix = (k: string) => fields.indexOf(k)
+  const entries = raw.split(',').map(e => e.split('|'))
+  const num = ix('ALLELE_NUM')
+  const mine = entries.filter(e => num >= 0 && e[num] ? Number(e[num]) === alleleNum : nAlts === 1 || e[0] === alt)
+  if (!mine.length) return null
+  const get = (e: string[], ...keys: string[]) => { for (const k of keys) { const v = ix(k) >= 0 ? e[ix(k)] : ''; if (v) return pct(v) } return '' }
+  const score = (e: string[]) => (get(e, 'MANE_SELECT') ? 8 : 0) + (get(e, 'CANONICAL') === 'YES' ? 4 : 0) + (/c\./.test(get(e, 'HGVSc', 'HGVS.c')) ? 2 : 0) + (get(e, 'BIOTYPE', 'Transcript_BioType') === 'protein_coding' ? 1 : 0)
+  const best = mine.reduce((a, b) => score(b) > score(a) ? b : a)
+  const out: TxAnnotation = {}
+  const gene = get(best, 'SYMBOL', 'Gene_Name'), c = get(best, 'HGVSc', 'HGVS.c'), p = get(best, 'HGVSp', 'HGVS.p')
+  if (gene) out.gene = gene
+  const feature = c.includes(':') ? c.slice(0, c.indexOf(':')) : get(best, 'Feature', 'Feature_ID')
+  if (/^(N[MR]_|X[MR]_|ENST)/.test(feature)) out.transcript = feature
+  if (/c\./.test(c) && parseC(c.replace(/^.*?(c\.)/, '$1'))) out.hgvsC = c.replace(/^.*?(c\.)/, '$1')
+  const pp = /p\./.test(p) ? parseP(p.replace(/^.*?(p\.)/, '$1')) : null
+  // Substitutions are rewritten in three-letter form ("p.Lys3326*" becomes "p.Lys3326Ter"); other types keep the tool's wording.
+  if (pp) out.hgvsP = ['missense', 'nonsense', 'synonymous'].includes(pp.kind) && pp.pos ? formatP(pp) : p.replace(/^.*?(p\.)/, '$1')
+  const af = maxOf([get(best, 'MAX_AF') || get(best, 'gnomADe_AF', 'gnomADg_AF', 'gnomAD_AF')])
+  if (af !== undefined && af <= 1) out.af = af
+  const revel = maxOf([get(best, 'REVEL', 'REVEL_score')])
+  if (revel !== undefined && revel <= 1) out.revel = revel
+  const sai = maxOf(['SpliceAI_pred_DS_AG', 'SpliceAI_pred_DS_AL', 'SpliceAI_pred_DS_DG', 'SpliceAI_pred_DS_DL'].map(k => get(best, k)))
+  if (sai !== undefined && sai <= 1) out.spliceAi = sai
+  return out
+}
+
+/** ClinVar VCF: aggregate CLNSIG, or one row per class from CLNSIGCONF ("Pathogenic(1)|Uncertain_significance(3)") when submitters conflict. */
+export function clinvarRows(info: Record<string, string>, variant: string, gene: string | undefined, file: string, line: number, idGen: () => string): LabRow[] {
+  const base = { variant, ...(gene ? { gene } : {}), criteria: [], line, file }
+  const rows: LabRow[] = []
+  if (info.CLNSIGCONF) {
+    for (const part of info.CLNSIGCONF.split(/[|,]/)) {
+      const m = /^(.*?)\((\d+)\)$/.exec(part.trim())
+      const cls = m && parseClass(m[1])
+      if (m && cls) rows.push({ ...base, id: idGen(), lab: `ClinVar: ${m[2]} submitter${m[2] === '1' ? '' : 's'} (${cls})`, cls })
+    }
+    if (rows.length) return rows
+  }
+  const cls = info.CLNSIG ? parseClass(info.CLNSIG) : null
+  if (cls) rows.push({ ...base, id: idGen(), lab: `ClinVar (${(info.CLNREVSTAT ?? 'aggregate').replace(/_/g, ' ').replace(/ ,/g, ',')})`, cls })
+  return rows
+}
 
 export function parseVcf(text: string, file: string, genome: Genome, idGen: () => string, maxRecords = 20000): VcfResult {
   const issues: Issue[] = []
@@ -83,8 +142,12 @@ export function parseVcf(text: string, file: string, genome: Genome, idGen: () =
   let samples: string[] = []
   let header: string[] | null = null
   const out: VariantRec[] = []
+  const labRows: LabRow[] = []
   const seen = new Set<string>()
   let records = 0
+  let csqFields: string[] | null = null
+  let noCarrier = 0
+  const unaligned = new Map<string, { n: number; line: number }>()
   const lines = text.split(/\r?\n/)
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
@@ -95,6 +158,8 @@ export function parseVcf(text: string, file: string, genome: Genome, idGen: () =
       if (ff) meta.fileformat = ff[1]
       const inf = /^##INFO=<ID=([^,>]+),Number=([^,>]+)/.exec(line)
       if (inf) { meta.info.push(inf[1]); infoNumber[inf[1]] = inf[2] }
+      const csq = /^##INFO=<ID=CSQ,.*Format: ([^"'>]+)/.exec(line)
+      if (csq) csqFields = csq[1].trim().split('|').map(s => s.trim())
       const ct = /^##contig=<ID=([^,>]+)/.exec(line)
       if (ct) meta.contigs.push(ct[1])
       continue
@@ -132,12 +197,13 @@ export function parseVcf(text: string, file: string, genome: Genome, idGen: () =
       const alt = altU.toUpperCase()
       if (alt === '.' ) return
       if (alt === '*') { issues.push({ line: ln, level: 'info', message: 'ALT "*" (overlapping deletion) skipped' }); return }
-      if (/^</.test(alt) || /[[\]]/.test(alt)) { issues.push({ line: ln, level: 'warning', message: `Symbolic/structural ALT ${altU} skipped; this workbench handles sequence variants` }); return }
+      if (alt === '<NON_REF>' || alt === '<*>') return
+      if (/^</.test(alt) || /[[\]]/.test(alt) || /^\.[ACGTN]|[ACGTN]\.$/.test(alt)) { issues.push({ line: ln, level: 'warning', message: `Symbolic/structural ALT ${altU} skipped; this workbench handles sequence variants` }); return }
       if (!/^[ACGTN]+$/.test(alt)) { issues.push({ line: ln, level: 'error', message: `ALT "${altU}" is not a base sequence` }); return }
       const n = normalize(genome, { chrom, pos, ref, alt })
       if (!n.ref && !n.alt) return
       if (n.pos !== pos || n.ref !== ref || n.alt !== alt) issues.push({ line: ln, level: 'info', message: `Normalised ${chrom}:${pos} ${ref}>${alt} to ${n.pos} ${n.ref}>${n.alt}${n.leftAligned ? ' (left-aligned)' : ''}` })
-      else if (!contig && (ref.length !== 1 || alt.length !== 1)) issues.push({ line: ln, level: 'warning', message: `No reference loaded for ${chrom}; indel trimmed but not left-aligned` })
+      if (!n.leftAligned && (ref.length !== 1 || alt.length !== 1)) { const u = unaligned.get(chrom) ?? { n: 0, line: ln }; u.n++; unaligned.set(chrom, u) }
       const g = { chrom: n.chrom, pos: n.pos, ref: n.ref, alt: n.alt }
       const key = gKey(g)
       if (seen.has(key)) { issues.push({ line: ln, level: 'warning', message: `Duplicate variant ${key} skipped` }); return }
@@ -148,17 +214,28 @@ export function parseVcf(text: string, file: string, genome: Genome, idGen: () =
         const parts = raw.split(',')
         return infoNumber[k] === 'A' || parts.length === alts.length ? parts[ai] ?? parts[0] : parts[0]
       }
+      // The first sample must carry this allele; 0/0 and no-call rows of a multi-sample or gVCF file are not worklist variants.
+      const gt = gtRaw ? splitGt(gtRaw, ai + 1) : undefined
+      if (gt && !gt.includes('1')) { noCarrier++; seen.delete(key); return }
+      const tx = infoMap.CSQ && csqFields ? pickAnnotation(infoMap.CSQ, csqFields, alt, ai + 1, alts.length) : infoMap.ANN ? pickAnnotation(infoMap.ANN, ANN_FIELDS, alt, ai + 1, alts.length) : null
+      if (tx) meta.annotation = infoMap.CSQ ? 'VEP CSQ' : 'SnpEff ANN'
       const afKey = AF_KEYS.find(k => pick(k) !== undefined && k !== 'AF')
-      const af = afKey ? parseNum(pick(afKey)!) : NaN
-      const revel = parseNum(pick('REVEL') ?? pick('REVEL_score') ?? '')
-      const sai = infoMap.SpliceAI ? spliceAiMax(infoMap.SpliceAI, alt) : NaN
+      const af = afKey ? parseNum(pick(afKey)!) : tx?.af ?? NaN
+      const revel = parseNum(pick('REVEL') ?? pick('REVEL_score') ?? String(tx?.revel ?? ''))
+      const sai = infoMap.SpliceAI ? spliceAiMax(infoMap.SpliceAI, alt) : tx?.spliceAi ?? NaN
       const rec: VariantRec = {
         id: idGen(), key, g, source: { file, line: ln, kind: 'vcf' },
         evidence: { popmaxAf: Number.isNaN(af) ? null : af, revel: Number.isNaN(revel) ? null : revel, spliceAi: Number.isNaN(sai) ? null : sai, functional: [] },
       }
-      if (infoMap.GENE || infoMap.Gene || infoMap.SYMBOL) rec.gene = infoMap.GENE ?? infoMap.Gene ?? infoMap.SYMBOL
+      // ClinVar writes GENEINFO=SYMBOL:id|SYMBOL2:id2; the first gene is used.
+      const gene = infoMap.GENE ?? infoMap.Gene ?? infoMap.SYMBOL ?? tx?.gene ?? infoMap.GENEINFO?.split(/[:|]/)[0]
+      if (gene && gene !== '.') rec.gene = gene
+      if (tx?.transcript) rec.transcript = tx.transcript
+      if (tx?.hgvsC) rec.hgvsC = tx.hgvsC
+      if (tx?.hgvsP) rec.hgvsP = tx.hgvsP
+      if (infoMap.CLNSIG || infoMap.CLNSIGCONF) { meta.annotation = 'ClinVar'; labRows.push(...clinvarRows(infoMap, key, rec.gene, file, ln, idGen)) }
       if (filter && filter !== 'PASS' && filter !== '.') { rec.filter = filter; issues.push({ line: ln, level: 'warning', message: `FILTER is ${filter}; kept but flagged` }) }
-      if (gtRaw) rec.gt = splitGt(gtRaw, ai + 1)
+      if (gt) rec.gt = gt
       if (ps && ps !== '.') rec.ps = ps
       if (samples[0]) rec.sample = samples[0]
       out.push(rec)
@@ -166,8 +243,11 @@ export function parseVcf(text: string, file: string, genome: Genome, idGen: () =
   }
   if (!meta.fileformat) issues.unshift({ line: 1, level: 'warning', message: 'Missing ##fileformat line; assuming VCFv4.2' })
   if (!header) issues.unshift({ line: 1, level: 'error', message: 'No #CHROM header line found' })
+  for (const [chrom, u] of unaligned) issues.push({ line: u.line, level: 'warning', message: `No reference loaded around ${u.n} indel or multi-base allele${u.n === 1 ? '' : 's'} on ${chrom}; trimmed but not left-aligned (first at this line)` })
   if (samples.length > 1) issues.push({ line: 1, level: 'info', message: `${samples.length} samples; genotypes read from the first (${samples[0]})` })
-  return { variants: out, issues, samples, records, meta }
+  if (noCarrier) issues.push({ line: 1, level: 'info', message: `${noCarrier} allele${noCarrier === 1 ? '' : 's'} skipped: ${samples[0] ?? 'the first sample'} is homozygous reference or not called there` })
+  if (meta.annotation) issues.push({ line: 1, level: 'info', message: meta.annotation === 'ClinVar' ? `ClinVar annotations found: gene from GENEINFO, ${labRows.length} classification${labRows.length === 1 ? '' : 's'} added to the lab comparison` : `${meta.annotation} annotations found: gene, transcript, HGVS and scores read from the preferred transcript (MANE Select, then canonical)` })
+  return { variants: out, labRows, issues, samples, records, meta }
 }
 
 /** Re-expresses a genotype relative to one ALT allele: "1|2" for allele 2 becomes "0|1". */
@@ -193,9 +273,9 @@ export interface FieldSpec { key: string; label: string; required?: boolean; ali
 export type Mapping = Record<string, number>
 
 export const VARIANT_FIELDS: FieldSpec[] = [
-  { key: 'hgvsC', label: 'HGVS c. (required unless genomic columns are mapped)', aliases: ['hgvs_c', 'hgvsc', 'c_dot', 'cdna', 'cdna_change', 'hgvs', 'variant', 'nucleotide_change', 'c_hgvs', 'hgvs_cdna'] },
+  { key: 'hgvsC', label: 'HGVS c. (required unless genomic columns are mapped)', aliases: ['hgvs_c', 'hgvsc', 'c_dot', 'cdna', 'cdna_change', 'hgvs', 'variant', 'nucleotide_change', 'c_hgvs', 'hgvs_cdna', 'name'] },
   { key: 'hgvsP', label: 'HGVS p.', aliases: ['hgvs_p', 'hgvsp', 'p_dot', 'protein', 'protein_change', 'amino_acid_change', 'p_hgvs', 'hgvs_protein'] },
-  { key: 'gene', label: 'Gene symbol', aliases: ['gene', 'gene_symbol', 'symbol', 'hgnc_symbol'] },
+  { key: 'gene', label: 'Gene symbol', aliases: ['gene', 'gene_symbol', 'symbol', 'hgnc_symbol', 'gene(s)', 'genes'] },
   { key: 'transcript', label: 'Transcript', aliases: ['transcript', 'transcript_id', 'refseq', 'nm', 'feature'] },
   { key: 'chrom', label: 'Chromosome', aliases: ['chrom', 'chr', 'chromosome', 'contig', '#chrom'] },
   { key: 'pos', label: 'Position', aliases: ['pos', 'position', 'start', 'genomic_position'] },
@@ -207,6 +287,10 @@ export const VARIANT_FIELDS: FieldSpec[] = [
   { key: 'gt', label: 'Genotype / zygosity', aliases: ['gt', 'genotype', 'zygosity', 'zyg'] },
   { key: 'ps', label: 'Phase set', aliases: ['ps', 'phase_set', 'phase', 'haplotype'] },
   { key: 'sample', label: 'Sample / case ID', aliases: ['sample', 'sample_id', 'case', 'case_id', 'proband'] },
+  // Present in ClinVar's tabular download; the calls go to the lab comparison.
+  { key: 'classification', label: 'Reported classification (e.g. ClinVar)', aliases: ['germline_classification', 'clinical_significance_(last_reviewed)', 'clinical_significance', 'clinvar_classification'] },
+  { key: 'reviewStatus', label: 'Review status', aliases: ['germline_review_status', 'review_status'] },
+  { key: 'classDate', label: 'Date last evaluated', aliases: ['germline_date_last_evaluated', 'date_last_evaluated', 'last_evaluated'] },
 ]
 
 export const LAB_FIELDS: FieldSpec[] = [
@@ -240,15 +324,16 @@ export function toGt(raw: string): string | undefined {
   return undefined
 }
 
-export interface CsvVariantResult { variants: VariantRec[]; issues: Issue[]; total: number }
+export interface CsvVariantResult { variants: VariantRec[]; labRows: LabRow[]; issues: Issue[]; total: number }
 
 export function validateVariantCsv(csv: { rows: string[][]; lines: number[] }, map: Mapping, file: string, genome: Genome, idGen: () => string): CsvVariantResult {
   const issues: Issue[] = []
   const total = Math.max(0, csv.rows.length - 1)
   const genomic = ['chrom', 'pos', 'ref', 'alt'].every(k => k in map)
-  if (!('hgvsC' in map) && !genomic) return { variants: [], issues: [{ line: 1, level: 'error', message: 'Map an HGVS c. column, or all four of chromosome, position, REF and ALT' }], total }
+  if (!('hgvsC' in map) && !genomic) return { variants: [], labRows: [], issues: [{ line: 1, level: 'error', message: 'Map an HGVS c. column, or all four of chromosome, position, REF and ALT' }], total }
   if ('hgvsC' in map && !('gene' in map) && !('transcript' in map)) issues.push({ line: 1, level: 'warning', message: 'No gene or transcript column; HGVS values must carry a prefix such as NM_000059.4(BRCA2):c.68-7T>A' })
   const out: VariantRec[] = []
+  const labRows: LabRow[] = []
   const seen = new Set<string>()
   const get = (rec: string[], k: string) => map[k] === undefined ? '' : (rec[map[k]] ?? '').trim()
   for (let r = 1; r < csv.rows.length; r++) {
@@ -262,19 +347,22 @@ export function validateVariantCsv(csv: { rows: string[][]; lines: number[] }, m
     }
     const ev: Evidence = { popmaxAf: num('af', 0, 1), revel: num('revel', 0, 1), spliceAi: num('spliceAi', 0, 1), functional: [] }
     const v: VariantRec = { id: idGen(), key: '', source: { file, line, kind: 'csv' }, evidence: ev }
-    const gene = get(rec, 'gene'), tx = get(rec, 'transcript')
+    // ClinVar lists overlapping genes as "A|B"; the HGVS prefix, when present, names the right one.
+    const gene = get(rec, 'gene').split('|')[0], tx = get(rec, 'transcript')
     if (gene) v.gene = gene
     if (tx) v.transcript = tx
     const c = get(rec, 'hgvsC')
     if (c) {
       const h = parseC(c.includes(':') || !(tx || gene) ? c : `${tx || gene}:${c.replace(/^.*?c\./, 'c.')}`)
       if (!h) { issues.push({ line, level: 'error', message: `HGVS "${c}" is not a supported c. description (substitution, del, dup, ins, delins)` }); continue }
-      v.hgvsC = c.replace(/^.*?(c\.)/, '$1')
-      v.gene ??= h.gene
+      v.hgvsC = c.replace(/^.*?(c\.)/, '$1').replace(/\s+\(?p\..*$/, '')
+      if (h.gene) v.gene = h.gene
       v.transcript ??= h.transcript
       if (!v.gene && !v.transcript) { issues.push({ line, level: 'error', message: 'No gene or transcript for this variant' }); continue }
     }
-    const p = get(rec, 'hgvsP')
+    // A protein change may ride along in the name: "... (p.Gln1756fs)".
+    const pCol = get(rec, 'hgvsP')
+    const p = /p\./.test(pCol) ? pCol : /\s\((p\.[^)]+)\)\s*$/.exec(c)?.[1] ?? pCol
     if (p && p !== '.' && p !== 'p.?') {
       if (!parseP(p.replace(/^.*?(p\.)/, '$1'))) issues.push({ line, level: 'warning', message: `HGVS p. "${p}" not recognised; ignored` })
       else v.hgvsP = p.replace(/^.*?(p\.)/, '$1')
@@ -301,8 +389,15 @@ export function validateVariantCsv(csv: { rows: string[][]; lines: number[] }, m
     if (seen.has(v.key + (v.sample ?? ''))) { issues.push({ line, level: 'warning', message: `Duplicate variant ${v.hgvsC ?? v.key} skipped` }); continue }
     seen.add(v.key + (v.sample ?? ''))
     out.push(v)
+    const clsRaw = get(rec, 'classification').replace(/\(last reviewed.*$/i, '')
+    if (clsRaw) {
+      const cls = parseClass(clsRaw)
+      const review = get(rec, 'reviewStatus'), date = get(rec, 'classDate')
+      if (cls) labRows.push({ id: idGen(), variant: v.hgvsC ? labVariantKey(v.hgvsC, v.gene) : v.key, ...(v.gene ? { gene: v.gene } : {}), lab: review ? `ClinVar (${review})` : 'Reported classification', cls, criteria: [], ...(date ? { date } : {}), line, file })
+      else issues.push({ line, level: 'info', message: `Classification "${clsRaw}" is not a single germline call; variant imported without it` })
+    }
   }
-  return { variants: out, issues, total }
+  return { variants: out, labRows, issues, total }
 }
 
 // ---------- Lab classification tables ----------
@@ -333,7 +428,7 @@ export function validateLabCsv(csv: { rows: string[][]; lines: number[] }, map: 
 
 /** Groups lab rows by a normalised variant description: gene/transcript prefix kept, versions and p. dropped. */
 export function labVariantKey(variant: string, gene?: string): string {
-  const v = variant.trim().replace(/\s+p\..*$/, '').replace(/\s+/g, '')
+  const v = variant.trim().replace(/\s+\(?p\..*$/, '').replace(/\s+/g, '')
   const h = parseC(v.includes(':') || !gene ? v : `${gene}:${v}`)
   if (!h) return v
   const prefix = (h.gene ?? gene ?? h.transcript ?? '').replace(/\.\d+$/, '')
@@ -398,7 +493,8 @@ export function parseFasta(text: string): { genome: Genome; issues: Issue[] } {
     if (!cur) return
     const seq = cur.parts.join('').toUpperCase()
     if (/[^ACGTN]/.test(seq)) issues.push({ line: cur.line, level: 'warning', message: `${cur.chrom}: IUPAC codes other than N were read as N` })
-    genome[cur.chrom] = { chrom: cur.chrom, start: cur.start, seq: seq.replace(/[^ACGTN]/g, 'N') }
+    // Keyed by region so two genes on one chromosome can both be loaded.
+    genome[cur.start === 1 ? cur.chrom : `${cur.chrom}:${cur.start}-${cur.start + seq.length - 1}`] = { chrom: cur.chrom, start: cur.start, seq: seq.replace(/[^ACGTN]/g, 'N') }
   }
   text.split(/\r?\n/).forEach((l, i) => {
     if (l.startsWith('>')) {

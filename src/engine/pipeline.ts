@@ -1,10 +1,9 @@
 // Ties the engine together: resolve a transcript, annotate, score splicing, work out phase, and evaluate ACMG criteria.
 import { appliedOf, combine, DEFAULT_GENE, effective, suggest, type ClassName, type Combined, type CriterionState, type GeneCfg, type Phase, type PhasePartner, type Suggestion } from './acmg.ts'
 import { parseC } from './hgvs.ts'
-import type { VariantRec } from './io.ts'
+import { normalize, type VariantRec } from './io.ts'
 import { spliceReport, type SpliceReport } from './splice.ts'
-import { annotate, annotateHgvs, gToHgvsC, hgvsCToG, refAt, type Annotation, type Genome, type GVariant, type Transcript } from './transcript.ts'
-import { findContig } from './io.ts'
+import { annotate, annotateHgvs, gToHgvsC, hasReference, hgvsCToG, refAt, type Annotation, type Genome, type GVariant, type Transcript } from './transcript.ts'
 
 export interface AuditEntry { at: number; editor: string; action: string; detail: string }
 export interface ClassChange { at: number; editor: string; from: ClassName | null; to: ClassName; points: number; reason: string }
@@ -54,11 +53,13 @@ export function analyse(rec: VariantRec, txs: Transcript[], genome: Genome): Ana
   if (g && tx) g = { ...g, chrom: tx.chrom }
   let ann: Annotation | null = null
   if (tx) {
-    const hasSeq = !!findContig(genome, tx.chrom)
+    const hasSeq = hasReference(genome, tx)
     if (!g && rec.hgvsC) {
       const h = parseC(`${tx.id}:${rec.hgvsC}`)
       if (h && hasSeq) {
         g = hgvsCToG(tx, genome, h)
+        // Same left-aligned form a VCF caller writes, so one variant has one genomic identity.
+        if (g) { const n = normalize(genome, g); g = { chrom: n.chrom, pos: n.pos, ref: n.ref, alt: n.alt } }
         if (!g) problems.push(`The reference base(s) do not match ${rec.hgvsC} on ${tx.id}; check the transcript version.`)
       }
       if (h) ann = annotate(tx, genome, { ...h, gene: tx.gene }, g, rec.hgvsP)
@@ -72,7 +73,7 @@ export function analyse(rec: VariantRec, txs: Transcript[], genome: Genome): Ana
     if (h) ann = annotateHgvs({ ...h, ...(rec.gene ? { gene: rec.gene } : {}) }, rec.hgvsP)
   }
   if (!ann && !problems.length) problems.push(rec.g ? 'Outside every loaded transcript model. Import a GTF subset for this gene to annotate it.' : 'Could not annotate this variant.')
-  const splice = tx && g && ann && findContig(genome, tx.chrom) ? spliceReport(tx, genome, g) : null
+  const splice = tx && g && ann && hasReference(genome, tx) ? spliceReport(tx, genome, g) : null
   const gene = tx?.gene ?? rec.gene ?? '—'
   const label = ann ? `${gene} ${ann.hgvsC.replace(/^.*:/, '')}${ann.hgvsP ? ' ' + ann.hgvsP : ''}` : rec.key
   return { rec, tx, ann, g, splice, gene, label, problems }

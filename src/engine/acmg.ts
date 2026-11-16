@@ -51,14 +51,29 @@ export function classify(points: number): ClassName {
   return 'Benign'
 }
 
-/** ClinGen-style VUS temperature, useful when deciding which VUS to revisit first. */
-export function vusTier(points: number): 'hot' | 'warm' | 'tepid' | 'cool' | null {
-  if (points < 0 || points > 5) return null
-  return points >= 4 ? 'hot' : points >= 2 ? 'warm' : points >= 1 ? 'tepid' : 'cool'
+export type VusTier = 'hot' | 'warm' | 'tepid' | 'cool' | 'cold' | 'ice cold'
+const TIERS: VusTier[] = ['ice cold', 'cold', 'cool', 'tepid', 'warm', 'hot']
+
+/** VUS temperature scale (ACGS best practice guidelines): one level per point, 0 = ice cold up to 5 = hot. */
+export function vusTier(points: number): VusTier | null {
+  return Number.isInteger(points) && points >= 0 && points <= 5 ? TIERS[points] : null
+}
+
+/** Prior probability and very-strong odds of pathogenicity from the Bayesian framework (Tavtigian et al. 2018). */
+export const PRIOR = 0.1
+export const ODDS_VERY_STRONG = 350
+
+/**
+ * Posterior probability of pathogenicity for a point total. Each point is one supporting unit of evidence,
+ * so the combined odds are 350^(points/8). The class thresholds are these posteriors: P > 0.99, LP >= 0.90, LB < 0.10, B < 0.001.
+ */
+export function posterior(points: number, prior = PRIOR): number {
+  const odds = ODDS_VERY_STRONG ** (points / 8)
+  return odds * prior / ((odds - 1) * prior + 1)
 }
 
 export interface Applied { code: string; strength: Strength }
-export interface Combined { points: number; cls: ClassName; counted: (Applied & { points: number })[]; excluded: (Applied & { why: string })[]; standAloneBenign: boolean }
+export interface Combined { points: number; cls: ClassName; counted: (Applied & { points: number })[]; excluded: (Applied & { why: string })[]; standAloneBenign: boolean; notes: string[] }
 
 /** Combines met criteria into points and a class, applying the double-counting rules. */
 export function combine(applied: Applied[]): Combined {
@@ -74,9 +89,17 @@ export function combine(applied: Applied[]): Combined {
     if (why) { excluded.push({ ...a, why }); continue }
     counted.push({ ...a, points: POINTS[a.strength] * (DEF[a.code]?.dir === 'B' ? -1 : 1) })
   }
+  // PP3 and PM1 both reflect where in the protein the change falls: together they are limited to Strong, 4 points (Pejaver et al. 2022).
+  const notes: string[] = []
+  const pp3 = counted.find(c => c.code === 'PP3'), pm1 = counted.find(c => c.code === 'PM1')
+  if (pp3 && pm1 && pp3.points + pm1.points > 4) {
+    const was = pp3.points
+    pp3.points = Math.max(0, 4 - pm1.points)
+    notes.push(`PP3 counted as ${pp3.points} point${pp3.points === 1 ? '' : 's'} instead of ${was}: PP3 and PM1 together are limited to Strong (4 points).`)
+  }
   const points = counted.reduce((s, c) => s + c.points, 0)
   const standAloneBenign = counted.some(c => c.code === 'BA1')
-  return { points, cls: standAloneBenign ? 'Benign' : classify(points), counted, excluded, standAloneBenign }
+  return { points, cls: standAloneBenign ? 'Benign' : classify(points), counted, excluded, standAloneBenign, notes }
 }
 
 // ---------- Inputs ----------
@@ -137,13 +160,14 @@ export function pvs1(a: Annotation, gene: GeneCfg): Pvs1Result {
 
 // ---------- Computational evidence thresholds ----------
 
-/** REVEL calibration (Pejaver et al. 2022). */
+/** REVEL calibration (Pejaver et al. 2022, Table 2). Scores between 0.290 and 0.644 are indeterminate. */
 export function revelStrength(s: number): { code: 'PP3' | 'BP4'; strength: Strength } | null {
   if (s >= 0.932) return { code: 'PP3', strength: 'Strong' }
   if (s >= 0.773) return { code: 'PP3', strength: 'Moderate' }
   if (s >= 0.644) return { code: 'PP3', strength: 'Supporting' }
-  if (s <= 0.003) return { code: 'BP4', strength: 'Strong' }
-  if (s <= 0.016) return { code: 'BP4', strength: 'Moderate' }
+  if (s <= 0.003) return { code: 'BP4', strength: 'VeryStrong' }
+  if (s <= 0.016) return { code: 'BP4', strength: 'Strong' }
+  if (s <= 0.183) return { code: 'BP4', strength: 'Moderate' }
   if (s <= 0.290) return { code: 'BP4', strength: 'Supporting' }
   return null
 }
@@ -243,27 +267,39 @@ export const appliedOf = (list: CriterionState[]): Applied[] => list.filter(c =>
 /** "PM2_Supporting" or plain "PVS1" when used at the default strength. */
 export const critLabel = (a: Applied) => a.strength === DEF[a.code]?.strength ? a.code : `${a.code}_${a.strength}`
 
-/** Parses lab-report criteria such as "PVS1, PM2_Supporting; PP3_Mod, PS3_P". Unknown tokens are returned separately. */
+/** Parses lab-report criteria such as "PVS1, PM2_Supporting; PP3_Mod, PS3_P, BP4_Very Strong". Unknown tokens are returned separately; a repeated code keeps its first strength. */
 export function parseCriteria(raw: string): { applied: Applied[]; unknown: string[] } {
   const applied: Applied[] = [], unknown: string[] = []
-  for (const tok of raw.split(/[,;|\s]+/).map(s => s.trim()).filter(Boolean)) {
-    const m = /^(PVS1|PS[1-4]|PM[1-6]|PP[1-5]|BA1|BS[1-4]|BP[1-7])(?:[_-]?(VeryStrong|Very_Strong|VStr|VS|Strong|Str|S|Moderate|Mod|M|Supporting|Sup|P))?$/i.exec(tok)
+  const text = raw.replace(/very[ _-]strong/gi, 'VeryStrong').replace(/stand[ _-]alone/gi, 'StandAlone').replace(/[()[\]]/g, ' ')
+  for (const tok of text.split(/[,;|\s]+/).map(s => s.trim().replace(/\.$/, '')).filter(Boolean)) {
+    const m = /^(PVS1|PS[1-4]|PM[1-6]|PP[1-5]|BA1|BS[1-4]|BP[1-7])(?:[_-]?(StandAlone|VeryStrong|VStr|VS|Strong|Str|S|Moderate|Mod|M|Supporting|Supp|Sup|P))?$/i.exec(tok)
     if (!m) { unknown.push(tok); continue }
     const code = m[1].toUpperCase()
-    const s = (m[2] ?? '').toLowerCase().replace('_', '')
-    const strength: Strength = !s ? DEF[code]?.strength ?? 'Supporting' : s.startsWith('v') ? 'VeryStrong' : s.startsWith('s') && s !== 'sup' && s !== 'supporting' ? 'Strong' : s.startsWith('m') ? 'Moderate' : 'Supporting'
+    if (applied.some(a => a.code === code)) continue
+    const s = (m[2] ?? '').toLowerCase()
+    const strength: Strength = !s ? DEF[code]?.strength ?? 'Supporting' : s === 'standalone' ? 'StandAlone' : s.startsWith('v') ? 'VeryStrong' : s.startsWith('su') || s === 'p' ? 'Supporting' : s.startsWith('s') ? 'Strong' : s.startsWith('m') ? 'Moderate' : 'Supporting'
     applied.push({ code, strength })
   }
   return { applied, unknown }
 }
 
-/** Parses a classification label from a lab report. */
+/**
+ * Parses a classification label from a lab report or a ClinVar record. ClinVar aggregate terms such as
+ * "Pathogenic/Likely pathogenic" take the less certain of the two; modifiers ("low penetrance", "risk factor",
+ * "other") are dropped. Terms that are not a germline pathogenicity call return null.
+ */
 export function parseClass(raw: string): ClassName | null {
-  const s = raw.trim().toLowerCase().replace(/[_-]+/g, ' ')
-  if (/^(p|path|pathogenic)$/.test(s)) return 'Pathogenic'
-  if (/^(lp|likely path(ogenic)?)$/.test(s)) return 'Likely pathogenic'
-  if (/^(vus|vous|us|uncertain( significance)?|variant of uncertain significance)$/.test(s)) return 'VUS'
-  if (/^(lb|likely benign)$/.test(s)) return 'Likely benign'
-  if (/^(b|benign)$/.test(s)) return 'Benign'
-  return null
+  const parts = raw.trim().toLowerCase().replace(/[_-]+/g, ' ').split(/[,;|]/)[0].split('/').map(s => s.trim())
+  const one = (s: string): ClassName | null => {
+    if (/^(p|path|pathogenic)$/.test(s)) return 'Pathogenic'
+    if (/^(lp|likely path(ogenic)?)$/.test(s)) return 'Likely pathogenic'
+    if (/^(vus|vous|us|uncertain( significance)?|variant of uncertain significance)$/.test(s)) return 'VUS'
+    if (/^(lb|likely benign)$/.test(s)) return 'Likely benign'
+    if (/^(b|benign)$/.test(s)) return 'Benign'
+    return null
+  }
+  const got = parts.map(one)
+  if (!got.length || got.some(g => g === null)) return null
+  // Of "Pathogenic/Likely pathogenic" or "Benign/Likely benign", keep the call nearer to uncertain.
+  return (got as ClassName[]).sort((a, b) => Math.abs(CLASSES.indexOf(a) - 2) - Math.abs(CLASSES.indexOf(b) - 2))[0]
 }

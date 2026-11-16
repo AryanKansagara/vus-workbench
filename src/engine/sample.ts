@@ -73,8 +73,9 @@ export const BUNDLED_GENES: Record<string, GeneCfg> = {
   SYNG1: { inheritance: 'AD', lofMechanism: true, pm2Max: 0.00002, bs1Min: 0.005, ba1Min: 0.05 },
   SYNG2: { inheritance: 'AR', lofMechanism: true, pm2Max: 0.0007, bs1Min: 0.01, ba1Min: 0.05 },
   // Protein lengths from the public RefSeq records (MANE Select), used to size truncations when no model is loaded.
-  BRCA1: { inheritance: 'AD', lofMechanism: true, pm2Max: 0.00002, bs1Min: 0.001, ba1Min: 0.001, proteinLength: 1863 },
-  BRCA2: { inheritance: 'AD', lofMechanism: true, pm2Max: 0.00002, bs1Min: 0.001, ba1Min: 0.001, proteinLength: 3418 },
+  // Critical regions are the clinically important domains: BRCA1 RING, coiled-coil and BRCT; BRCA2 PALB2-binding and DNA-binding.
+  BRCA1: { inheritance: 'AD', lofMechanism: true, pm2Max: 0.00002, bs1Min: 0.001, ba1Min: 0.001, proteinLength: 1863, criticalRegions: [[2, 101], [1391, 1424], [1650, 1857]] },
+  BRCA2: { inheritance: 'AD', lofMechanism: true, pm2Max: 0.00002, bs1Min: 0.001, ba1Min: 0.001, proteinLength: 3418, criticalRegions: [[10, 40], [2481, 3186]] },
   CFTR: { inheritance: 'AR', lofMechanism: true, pm2Max: 0.005, bs1Min: 0.02, ba1Min: 0.05, proteinLength: 1480 },
 }
 

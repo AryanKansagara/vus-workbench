@@ -1,0 +1,9 @@
+##fileformat=VCFv4.2
+##fixture=Excerpt written to match SnpEff 5.x output (ANN field, VCF annotation format 1.0). Variants are public ClinVar descriptions on GRCh38.
+##SnpEffVersion="5.2 (build 2023-09-29 06:17), by Pablo Cingolani"
+##INFO=<ID=ANN,Number=.,Type=String,Description="Functional annotations: 'Allele | Annotation | Annotation_Impact | Gene_Name | Gene_ID | Feature_Type | Feature_ID | Transcript_BioType | Rank | HGVS.c | HGVS.p | cDNA.pos / cDNA.length | CDS.pos / CDS.length | AA.pos / AA.length | Distance | ERRORS / WARNINGS / INFO' ">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	SAMPLE1
+13	32398489	.	A	T	1502.2	PASS	ANN=T|stop_gained|HIGH|BRCA2|ENSG00000139618|transcript|NM_000059.4|protein_coding|27/27|c.9976A>T|p.Lys3326*|10209/11954|9976/10257|3326/3418||,T|downstream_gene_variant|MODIFIER|N4BP2L1|ENSG00000139597|transcript|NM_052818.3|protein_coding||c.*4517T>A|||||4517|	GT	0/1
+17	43057062	.	T	TG	988.0	PASS	ANN=TG|frameshift_variant|HIGH|BRCA1|ENSG00000012048|transcript|NM_007294.4|protein_coding|19/23|c.5266dupC|p.Gln1756fs|5379/7088|5266/5592|1756/1863||INFO_REALIGN_3_PRIME	GT	0/1
+7	117559590	.	ATCT	A	2100.4	PASS	ANN=A|conservative_inframe_deletion|MODERATE|CFTR|ENSG00000001626|transcript|NM_000492.4|protein_coding|11/27|c.1521_1523delCTT|p.Phe508del|1591/6070|1521/4443|507/1480||INFO_REALIGN_3_PRIME	GT	1/1

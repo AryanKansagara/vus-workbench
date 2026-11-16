@@ -16,7 +16,8 @@ function cpos(sign: string, n: string, osign?: string, off?: string): CPos {
 }
 
 export function parseC(raw: string): HgvsC | null {
-  const s = raw.trim().replace(/\s+/g, '')
+  // ClinVar names carry the protein change after a space: "NM_007294.4(BRCA1):c.5266dup (p.Gln1756fs)".
+  const s = raw.trim().replace(/\s+\(?p\..*$/, '').replace(/\s+/g, '')
   // Gene-only prefixes such as "BRCA2:c.68-7T>A" are accepted; "GENE(NM_...)" order is normalised too.
   const swapped = s.replace(/^([A-Za-z0-9-]+)\((N[MR]_[\d.]+|ENST[\d.]+)\):/, '$2($1):')
   const m = RE_C.exec(swapped)

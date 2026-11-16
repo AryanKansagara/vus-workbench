@@ -23,13 +23,20 @@ export type Genome = Record<string, RefSeq>
 /** A genomic variant in VCF style: 1-based `pos` of the first REF base. */
 export interface GVariant { chrom: string; pos: number; ref: string; alt: string }
 
+export const sameChrom = (a: string, b: string) => a.replace(/^chr/i, '') === b.replace(/^chr/i, '')
+
+/** Reference bases at a position. A genome may hold several regions of one chromosome (one per gene); the region covering the span is used. */
 export function refAt(g: Genome, chrom: string, pos: number, len: number): string | null {
-  const r = g[chrom]
-  if (!r) return null
-  const i = pos - r.start
-  if (i < 0 || i + len > r.seq.length) return null
-  return r.seq.slice(i, i + len)
+  for (const k in g) {
+    const r = g[k]
+    const i = pos - r.start
+    if (i >= 0 && i + len <= r.seq.length && sameChrom(r.chrom, chrom)) return r.seq.slice(i, i + len)
+  }
+  return null
 }
+
+/** True when a loaded reference region covers the whole transcript. */
+export const hasReference = (g: Genome, t: Transcript) => refAt(g, t.chrom, t.exons[0][0], 1) !== null && refAt(g, t.chrom, t.exons[t.exons.length - 1][1], 1) !== null
 
 // ---------- Structure ----------
 
