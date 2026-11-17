@@ -280,7 +280,7 @@ export function Footer() {
       <div className="footer-inner">
         <div className="footer-brand"><Monogram /> <strong>VUS Workbench</strong></div>
         <nav className="footer-nav" aria-label="Footer"><Link href="/app">Worklists</Link><Link href="/docs">Docs</Link><Link href="/settings">Settings</Link></nav>
-        <p>Built by Aryan Kansagara. Independent project, not affiliated with Deep Genomics.</p>
+        <p>Built by Aryan Kansagara.</p>
         <p className="muted small">Research use only, not for diagnostic use. Samples are synthetic and labelled; no patient data. Files are parsed in your browser and stored on this device unless you sign in to sync.</p>
       </div>
     </footer>
