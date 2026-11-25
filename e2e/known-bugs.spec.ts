@@ -181,7 +181,7 @@ test('#18 BP7 starts at intron position +7', async ({ page }) => {
   await miniHgvs(page, ['MINI,c.75+7T>C,0.001,0'], 'gene,hgvs_c,popmax_af,spliceai')
   await expect(crit(page, 'c.75+7T>C')).toHaveText(['BP4', 'BP7'], { timeout: 5000 })
 })
-test.fail('#19 a duplicated residue is named dup', async ({ page }) => {
+test('#19 a duplicated residue is named dup', async ({ page }) => {
   await miniHgvs(page, ['MINI,c.31_33dup,0'])
   await expect(row(page, 'c.31_33dup')).toContainText('p.(Arg11dup)', { timeout: 5000 })
 })
