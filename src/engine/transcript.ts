@@ -1,5 +1,5 @@
 // Transcript model: genomic <-> c. mapping, HGVS from a genomic variant, protein effect, consequence and NMD.
-import { formatC, lengthChange, parseP, type CPos, type HgvsC, type PKind } from './hgvs.ts'
+import { formatC, formatPos, lengthChange, parseP, type CPos, type HgvsC, type PKind } from './hgvs.ts'
 import { aa3, revcomp, translate } from './seq.ts'
 
 export interface Transcript {
@@ -206,6 +206,38 @@ export function gToHgvsC(t: Transcript, g: Genome, v: GVariant): HgvsC {
   return { ...base, ...(ref.length === 1 ? { start: gToC(t, start).cpos } : span(start, start + ref.length - 1)), kind: 'delins', ref: o(ref), alt: o(alt) }
 }
 
+/** Why a c. description cannot be a place on this transcript, or null. `hasSeq`: without sequence the CDS end may lack its stop codon, so the end is not checked. */
+export function positionProblem(t: Transcript, h: HgvsC, hasSeq: boolean): string | null {
+  const ex = txExons(t)
+  const ends: number[] = []
+  let acc = 0
+  for (const e of ex) ends.push(acc += exLen(e))
+  for (const p of h.end ? [h.start, h.end] : [h.start]) {
+    const name = `c.${formatPos(p)}`, anchor = `c.${formatPos({ ...p, offset: 0 })}`
+    if (hasSeq && !p.star && p.pos > cdsBounds(t).length) return `${name} is past the end of the coding sequence of ${t.id} (${cdsBounds(t).length} nt); 3' UTR positions are written c.*1 on.`
+    if (!p.offset) continue
+    const tx = cToTx(t, p)
+    const i = p.offset > 0 ? ends.indexOf(tx) : ends.indexOf(tx - 1) // the intron after exon i + 1
+    if (i < 0 || i >= ex.length - 1) return `${name} is not an intron position of ${t.id}: ${anchor} is not the ${p.offset > 0 ? 'last' : 'first'} base of an exon next to an intron.`
+    const intron = t.strand === 1 ? ex[i + 1][0] - ex[i][1] - 1 : ex[i][0] - ex[i + 1][1] - 1
+    if (Math.abs(p.offset) > intron) return `${name} is outside the intron, which is ${intron} nt long.`
+  }
+  if (h.end && (cToG(t, h.end) - cToG(t, h.start)) * t.strand < 0) return reversedMessage(h)
+  return null
+}
+
+/** The same without a model: only an order that no transcript can have. */
+export function orderProblem(h: HgvsC): string | null {
+  if (!h.end) return null
+  const a = h.start, b = h.end
+  const d = Number(!!b.star) - Number(!!a.star) || b.pos - a.pos
+  // Within one anchor the offsets decide; c.101-80_100+60 lies in one intron, and its order depends on the length of that intron.
+  const reversed = d < 0 ? !(a.offset < 0 && b.offset > 0 && d >= (a.pos === 1 ? -2 : -1)) : d === 0 && b.offset < a.offset
+  return reversed ? reversedMessage(h) : null
+}
+
+const reversedMessage = (h: HgvsC) => `c.${formatPos(h.start)}_${formatPos(h.end!)} runs backwards; write the 5' position first.`
+
 /** Genomic variant (VCF style, with anchor base for indels) from HGVS c.; needs the reference. */
 export function hgvsCToG(t: Transcript, g: Genome, h: HgvsC): GVariant | null {
   const a = cToG(t, h.start), b = h.end ? cToG(t, h.end) : a
@@ -220,9 +252,9 @@ export function hgvsCToG(t: Transcript, g: Genome, h: HgvsC): GVariant | null {
   switch (h.kind) {
     case 'sub': return refSpan === o(h.ref!) ? { chrom: t.chrom, pos: lo, ref: refSpan, alt: o(h.alt!) } : null
     case 'del': return h.ref && o(h.ref) !== refSpan ? null : anchor(lo, refSpan, '')
-    case 'dup': return anchor(hi + 1, '', refSpan)
+    case 'dup': return h.ref && o(h.ref) !== refSpan ? null : anchor(hi + 1, '', refSpan)
     case 'ins': return hi - lo === 1 ? anchor(hi, '', o(h.alt!)) : null
-    case 'delins': return { chrom: t.chrom, pos: lo, ref: refSpan, alt: o(h.alt!) }
+    case 'delins': return h.ref && o(h.ref) !== refSpan ? null : { chrom: t.chrom, pos: lo, ref: refSpan, alt: o(h.alt!) }
   }
 }
 
