@@ -134,8 +134,8 @@ export function pvs1(a: Annotation, gene: GeneCfg): Pvs1Result {
   path.push('Null variant; loss of function is a known mechanism.')
   if (c === 'start_lost') { path.push('Initiation codon: no evidence modelled for an alternative start; PVS1_Moderate.'); return { strength: 'Moderate', path } }
   const removed = a.removedFraction
-  // A critical region downstream of the stop is lost with the truncated protein.
-  const critical = a.ptcAa !== undefined && (gene.criticalRegions ?? []).some(([, hi]) => hi >= a.ptcAa!)
+  // A critical region downstream of the stop is lost with the truncated protein; a skipped exon takes the residues it codes for.
+  const critical = (gene.criticalRegions ?? []).some(([lo, hi]) => (a.ptcAa !== undefined && hi >= a.ptcAa) || (!!a.lostAa && lo <= a.lostAa[1] && hi >= a.lostAa[0]))
   const escape = (what: string): Pvs1Result => {
     path.push(what)
     if (critical) { path.push('Truncated or skipped region overlaps a critical region (gene setting): PVS1_Strong.'); return { strength: 'Strong', path } }

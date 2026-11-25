@@ -163,7 +163,7 @@ test('#15 a reversed range is refused and not scored', async ({ page }) => {
   await expect(row(page, 'c.90_80del').locator('.flag')).toHaveText('check', { timeout: 5000 })
   await expect(crit(page, 'c.90_80del')).toHaveCount(0)
 })
-test.fail('#16 skipping an exon in a critical region is PVS1_Strong even under 10%', async ({ page }) => {
+test('#16 skipping an exon in a critical region is PVS1_Strong even under 10%', async ({ page }) => {
   // ODD: coding 90 + 6 + 57 = 153 nt = 50 residues + stop. Skipping exon 2 removes residues 31-32, 2 of 50 = 4%.
   await odd(page, ['ODD,c.96+1T>G'])
   await tab(page, 'Genes')
