@@ -224,16 +224,22 @@ export function suggest(a: Annotation, ev: Evidence, gene: GeneCfg, splice: Spli
 
   if (['inframe_deletion', 'inframe_insertion', 'inframe_delins', 'stop_lost'].includes(a.consequence) && !isNull) add('PM4', 'Moderate', a.consequence === 'stop_lost' ? 'Stop-loss extends the protein.' : 'In-frame length change; confirm it is not in a repeat region (else BP3).')
 
-  // Functional evidence: strongest entry in each direction.
+  // Functional evidence: strongest entry in each direction. An OddsPath of 0.48 to 2.1 is indeterminate (Brnich et al. 2019), and one that
+  // points the other way contradicts the stated result: neither is evidence. Supporting without an OddsPath.
   for (const dir of ['abnormal', 'normal'] as const) {
+    const code = dir === 'abnormal' ? 'PS3' : 'BS3', word = dir === 'abnormal' ? 'damaging' : 'normal'
     const list = ev.functional.filter(f => f.result === dir)
     let bestF: { strength: Strength; text: string } | null = null
+    const not: string[] = []
     for (const f of list) {
       const s = f.oddsPath !== null ? oddsPathStrength(f.oddsPath) : null
-      const strength: Strength = s && s.code === (dir === 'abnormal' ? 'PS3' : 'BS3') ? s.strength : 'Supporting'
+      if (f.oddsPath !== null && s?.code !== code) { not.push(`${f.assay} (OddsPath ${f.oddsPath} ${s ? `points to ${s.code}, against the stated ${word} result` : 'is indeterminate, 0.48 to 2.1'})`); continue }
+      const strength: Strength = s ? s.strength : 'Supporting'
       if (!bestF || POINTS[strength] > POINTS[bestF.strength]) bestF = { strength, text: `${f.assay}${f.oddsPath !== null ? ` (OddsPath ${f.oddsPath})` : ' (no OddsPath: Supporting)'}` }
     }
-    if (bestF) add(dir === 'abnormal' ? 'PS3' : 'BS3', bestF.strength, `${list.length} functional ${dir === 'abnormal' ? 'damaging' : 'normal'} result${list.length > 1 ? 's' : ''}; strongest: ${bestF.text}.`)
+    const left = not.length ? ` Not counted: ${not.join('; ')}.` : '', n = list.length - not.length
+    if (bestF) add(code, bestF.strength, `${n} functional ${word} result${n > 1 ? 's' : ''}; strongest: ${bestF.text}.${left}`)
+    else if (not.length) out.push({ code, met: false, strength: 'Supporting', reason: `${code} not applied.${left}` })
   }
 
   // Phase with other variants in the same gene.
