@@ -228,7 +228,7 @@ export function hgvsCToG(t: Transcript, g: Genome, h: HgvsC): GVariant | null {
 
 // ---------- Protein effect ----------
 
-export interface ProteinEffect { hgvsP: string; ptcAa?: number }
+export interface ProteinEffect { hgvsP: string; ptcAa?: number; /** The change is wholly 5' of the start codon, which is kept. */ utr5?: boolean }
 
 /** Protein consequence for a variant fully inside exons, computed by translating the edited transcript. */
 export function proteinEffect(t: Transcript, g: Genome, v: GVariant): ProteinEffect | null {
@@ -242,8 +242,14 @@ export function proteinEffect(t: Transcript, g: Genome, v: GVariant): ProteinEff
   const [x, y] = t.strand === 1 ? [ta, tb] : [tb, ta]
   const altO = t.strand === 1 ? alt : revcomp(alt)
   const edited = ref ? m.slice(0, x - 1) + altO + m.slice(y) : m.slice(0, x) + altO + m.slice(x)
-  if (y < cds.start || x > cds.end) return null
-  if (x < cds.start + 3 && y >= cds.start) return { hgvsP: 'p.(Met1?)' }
+  if (y < cds.start) return { hgvsP: 'p.?', utr5: true }
+  if (x > cds.end) return null
+  if (x < cds.start + 3 && y >= cds.start) {
+    // Everything from ATG on unchanged: the variant is 5' UTR, also when the 3' rule names it inside the codon (inserting AT before ATG is c.1_2dup).
+    if (edited.endsWith(m.slice(cds.start - 1))) return { hgvsP: 'p.?', utr5: true }
+    // An insertion after ATG, or a deletion that brings the same base back, leaves the first codon as it was.
+    if (x < cds.start || edited.slice(cds.start - 1, cds.start + 2) !== m.slice(cds.start - 1, cds.start + 2)) return { hgvsP: 'p.(Met1?)' }
+  }
   const refP = translate(m.slice(cds.start - 1, cds.end), false)
   // Without its stop the reference protein cannot be compared with an edited one, which runs to a stop.
   if (!refP.endsWith('*') || cds.length % 3 !== 0) return null
@@ -359,7 +365,8 @@ export function annotateHgvs(h: HgvsC, hgvsP?: string): Annotation {
   if (canonical) consequence = pos.find(q => isCanonical(q.offset))!.offset > 0 ? 'splice_donor' : 'splice_acceptor'
   else if (lost.donor || lost.acceptor) consequence = lost.acceptor ? 'splice_acceptor' : 'splice_donor'
   else if (allIntronic) consequence = inRegion ? 'splice_region' : 'intronic'
-  else if (pos.every(q => !q.star && q.pos < 0)) consequence = 'utr5'
+  // An insertion between c.-1 and c.1 leaves the start codon whole.
+  else if (pos.every(q => !q.star && q.pos < 0) || (h.kind === 'ins' && h.start.pos < 0 && h.end?.pos === 1 && !h.end.star)) consequence = 'utr5'
   else if (pos.every(q => q.star)) consequence = 'utr3'
   else if (p && p.kind !== 'unknown') {
     consequence = pKindToConsequence(p.kind)
@@ -412,11 +419,13 @@ function deletedExons(t: Transcript, h: HgvsC): number[] {
 
 /** Full annotation against a transcript model. `v` is optional for c.-only input; with it, protein effect is computed from sequence. */
 export function annotate(t: Transcript, g: Genome, h: HgvsC, v?: GVariant | null, givenP?: string): Annotation {
-  const effect = v ? proteinEffect(t, g, v) : null
-  const hgvsP = effect?.hgvsP ?? givenP
-  const a = annotateHgvs(h, hgvsP)
+  const found = v ? proteinEffect(t, g, v) : null
+  const effect = found?.utr5 ? null : found
+  let a = annotateHgvs(h, effect?.hgvsP ?? givenP)
+  // The 3' rule can name a 5' UTR change with positions inside the first codon.
+  if (found?.utr5 && a.consequence !== 'utr5') a = { ...annotateHgvs(h), consequence: 'utr5' }
   a.model = 'transcript'
-  a.notes = a.notes.filter(n => !n.startsWith('No transcript model') && !(effect && n.startsWith('Add the p.')))
+  a.notes = a.notes.filter(n => !n.startsWith('No transcript model') && !(found && n.startsWith('Add the p.')))
   if (!effect && !givenP && !v) a.notes.push('Reference sequence is not loaded for this contig; protein effect is taken from the p. description if given.')
   if (effect?.ptcAa) a.ptcAa = effect.ptcAa
   const ex = txExons(t)
