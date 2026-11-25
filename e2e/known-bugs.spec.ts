@@ -12,12 +12,12 @@ async function odd(page: Parameters<typeof row>[0], lines: string[]) {
   await importFile(page, 'odd.csv', ['gene,hgvs_c', ...lines, ''].join('\n'))
 }
 
-test.fail('#2 a deletion that removes a whole donor site is a null variant, not an in-frame deletion', async ({ page }) => {
+test('#2 a deletion that removes a whole donor site is a null variant, not an in-frame deletion', async ({ page }) => {
   await miniHgvs(page, ['MINI,c.70_75+5del,0'])
   // Exon 2 is lost: 60 nt in frame, 20 of 32 residues. PVS1_Strong + PM2.
   await expect(crit(page, 'c.70_75+5del')).toHaveText(['PVS1_Strong', 'PM2'], { timeout: 5000 })
 })
-test.fail('#2 a deletion of a whole exon is not intronic', async ({ page }) => {
+test('#2 a deletion of a whole exon is not intronic', async ({ page }) => {
   await miniHgvs(page, ['MINI,c.16-20_75+18del,0'])
   await expect(crit(page, 'c.16-20_75+18del')).toHaveText(['PVS1_Strong', 'PM2'], { timeout: 5000 })
 })
