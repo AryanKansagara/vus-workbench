@@ -5,7 +5,7 @@ import { autoMap, LAB_FIELDS, parseCsv, parseVcf, validateLabCsv, validateVarian
 import { analyse, evaluateAll, newCuration, type Curation, type Evaluated } from './engine/pipeline.ts'
 import { BUNDLED_GENES, BUNDLED_GENOME, BUNDLED_TRANSCRIPTS, LAB_CSV, REAL_VARIANTS_CSV, SAMPLES, sampleVcf } from './engine/sample.ts'
 import { CONSEQUENCE_LABEL, withStop } from './engine/transcript.ts'
-import { defaultGene, editorName, getProject, getProjects, saveProject, updateProject, useProjects, uuid, type Project, type Snapshot } from './store.ts'
+import { defaultGene, editorName, getProject, getProjects, saveProject, updateProject, useProjects, uuid, type Project, type SnapRow, type Snapshot } from './store.ts'
 
 export const context = (p: Project) => {
   const genome = { ...BUNDLED_GENOME, ...p.genome }
@@ -89,20 +89,35 @@ export function undoCuration(p: Project, before: Project, after: Project, vid: s
 export function snapshotOf(evaluated: Evaluated[], label: string, at = Date.now()): Snapshot {
   return {
     id: uuid(), label, createdAt: at,
-    rows: evaluated.map(e => ({ key: e.an.rec.key, label: e.an.label, cls: e.result.cls, points: e.result.points, criteria: e.result.counted.map(critLabel) })),
+    rows: evaluated.map(e => ({ key: e.an.rec.key, sample: e.an.rec.sample ?? '', label: e.an.label, cls: e.result.cls, points: e.result.points, criteria: e.result.counted.map(critLabel) })),
   }
 }
 
 export interface SnapDiff { reclassified: { key: string; label: string; from: ClassName; to: ClassName; dPoints: number; added: string[]; removed: string[] }[]; added: Snapshot['rows']; removed: Snapshot['rows']; unchanged: number }
 
+export const snapRowLabel = (r: SnapRow) => r.sample ? `${r.label} (${r.sample})` : r.label
+
+/** Rows by variant and sample. Without samples in a snapshot, rows of one variant are told apart by their order in the worklist. */
+function snapIndex(s: Snapshot, bySample: boolean): Map<string, SnapRow> {
+  const m = new Map<string, SnapRow>(), n = new Map<string, number>()
+  for (const r of s.rows) {
+    const id = JSON.stringify(bySample ? [r.key, r.sample] : [r.key])
+    const k = n.get(id) ?? 0
+    n.set(id, k + 1)
+    m.set(`${id}#${k}`, r)
+  }
+  return m
+}
+
 export function compareSnapshots(a: Snapshot, b: Snapshot): SnapDiff {
-  const A = new Map(a.rows.map(r => [r.key, r])), B = new Map(b.rows.map(r => [r.key, r]))
+  const bySample = [...a.rows, ...b.rows].every(r => r.sample !== undefined)
+  const A = snapIndex(a, bySample), B = snapIndex(b, bySample)
   const out: SnapDiff = { reclassified: [], added: [], removed: [], unchanged: 0 }
   for (const [k, r] of B) {
     const o = A.get(k)
     if (!o) { out.added.push(r); continue }
     const added = r.criteria.filter(c => !o.criteria.includes(c)), removed = o.criteria.filter(c => !r.criteria.includes(c))
-    if (o.cls !== r.cls || added.length || removed.length) out.reclassified.push({ key: k, label: r.label, from: o.cls, to: r.cls, dPoints: r.points - o.points, added, removed })
+    if (o.cls !== r.cls || added.length || removed.length) out.reclassified.push({ key: k, label: snapRowLabel(r), from: o.cls, to: r.cls, dPoints: r.points - o.points, added, removed })
     else out.unchanged++
   }
   for (const [k, r] of A) if (!B.has(k)) out.removed.push(r)

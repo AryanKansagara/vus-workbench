@@ -6,7 +6,8 @@ import type { Genome, Transcript } from './engine/transcript.ts'
 
 export interface ImportMeta { id: string; kind: string; fileName: string; rows: number; issues: number; at: number }
 
-export interface SnapRow { key: string; label: string; cls: ClassName; points: number; criteria: string[] }
+/** `sample` is "" for a row without one, and missing in snapshots saved before samples were kept. */
+export interface SnapRow { key: string; sample?: string; label: string; cls: ClassName; points: number; criteria: string[] }
 export interface Snapshot { id: string; label: string; createdAt: number; rows: SnapRow[] }
 
 export interface Project {

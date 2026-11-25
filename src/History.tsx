@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { Evaluated } from './engine/pipeline.ts'
-import { compareSnapshots, snapshotOf } from './projectData.ts'
+import { compareSnapshots, snapRowLabel, snapshotOf } from './projectData.ts'
 import { updateProject, type Project } from './store.ts'
 import { deleteSnapshotCloud } from './sync.ts'
 import { Empty, fmtDateTime, Link, toast } from './ui.tsx'
@@ -46,8 +46,8 @@ export default function History({ project, evaluated }: { project: Project; eval
                 </table>
               </div>
             )}
-            {diff.added.length > 0 && <p className="small">New: {diff.added.map(r => r.label).join(', ')}</p>}
-            {diff.removed.length > 0 && <p className="small">Removed: {diff.removed.map(r => r.label).join(', ')}</p>}
+            {diff.added.length > 0 && <p className="small">New: {diff.added.map(snapRowLabel).join(', ')}</p>}
+            {diff.removed.length > 0 && <p className="small">Removed: {diff.removed.map(snapRowLabel).join(', ')}</p>}
           </div>
         )}
       </div>
