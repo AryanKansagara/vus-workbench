@@ -294,7 +294,9 @@ export function proteinEffect(t: Transcript, g: Genome, v: GVariant): ProteinEff
   }
   const dl = altO.length - (ref ? y - x + 1 : 0)
   const at = (k: number) => aa3(refP[k]) + (k + 1)
-  if (refP[i] === '*') return { hgvsP: `p.(Ter${i + 1}${aa3(altP[i] ?? 'X')}extTer?)` }
+  // Residues added just before the stop, which is kept, are not an extension.
+  const beforeStop = dl > 0 && dl % 3 === 0 && altP.length === refP.length + dl / 3 && altP.endsWith('*')
+  if (refP[i] === '*' && !beforeStop) return { hgvsP: `p.(Ter${i + 1}${aa3(altP[i] ?? 'X')}extTer?)` }
   if (altP[i] === '*') return { hgvsP: `p.(${at(i)}Ter)`, ptcAa: i + 1 }
   if (dl % 3 !== 0) {
     const ter = altP.indexOf('*', i)
@@ -313,6 +315,9 @@ export function proteinEffect(t: Transcript, g: Genome, v: GVariant): ProteinEff
   const rng = (n: number) => n === 1 ? at(i) : `${at(i)}_${at(i + n - 1)}`
   if (delSeg.length === 1 && insSeg.length === 1) return { hgvsP: `p.(${at(i)}${aa3(insSeg)})` }
   if (!insSeg) return { hgvsP: `p.(${rng(delSeg.length)}del)` }
+  // HGVS: a copy of the residues directly before it is a duplication, which has priority over an insertion.
+  const n = insSeg.length
+  if (!delSeg && !insSeg.includes('*') && n <= i && refP.slice(i - n, i) === insSeg) return { hgvsP: `p.(${at(i - n)}${n > 1 ? `_${at(i - 1)}` : ''}dup)` }
   if (!delSeg) return { hgvsP: `p.(${at(i - 1)}_${at(i)}ins${aa3(insSeg)})`, ...ptc }
   return { hgvsP: `p.(${rng(delSeg.length)}delins${aa3(insSeg)})`, ...ptc }
 }
