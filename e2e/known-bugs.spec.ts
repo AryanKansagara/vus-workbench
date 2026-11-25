@@ -53,13 +53,13 @@ test.fail('#5 a strength in brackets is kept, and a criterion marked not met is 
   await importFile(page, 'labs.csv', 'variant,lab,classification,criteria\nBRCA2:c.1A>G,Lab A,VUS,"PS3 (Moderate), PM2 not met"\n')
   await expect(page.locator('tr.sum td').nth(1)).toHaveText('2', { timeout: 5000 })
 })
-test.fail('#6 two spellings of one variant are compared', async ({ page }) => {
+test('#6 two spellings of one variant are compared', async ({ page }) => {
   await newWorklist(page)
   await importFile(page, 'labs.csv', 'variant,gene,lab,classification\nNM_007294.4:c.5266dupC,BRCA1,A,Pathogenic\nNM_007294.4:c.5266dup,BRCA1,B,Benign\n')
   await expect(page.locator('.disc')).toHaveCount(1, { timeout: 5000 })
   await expect(page.locator('.disc .sev')).toHaveText('Major (P/LP vs B/LB)')
 })
-test.fail('#6 the latest call wins with ClinVar dates', async ({ page }) => {
+test('#6 the latest call wins with ClinVar dates', async ({ page }) => {
   await newWorklist(page)
   await importFile(page, 'labs.csv', 'variant,lab,classification,date_evaluated\nBRCA2:c.1A>G,A,Benign,"Jan 09, 2024"\nBRCA2:c.1A>G,A,Pathogenic,"Sep 18, 2019"\n')
   await expect(page.locator('.disc .cls-row .cls')).toHaveText(['B'], { timeout: 5000 })

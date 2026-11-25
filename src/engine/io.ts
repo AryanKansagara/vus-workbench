@@ -439,19 +439,43 @@ export function validateLabCsv(csv: { rows: string[][]; lines: number[] }, map: 
     if (!cls) { issues.push({ line, level: 'error', message: `Classification "${clsRaw}" not recognised (use P, LP, VUS, LB, B or the full names)` }); continue }
     const { applied, unknown } = parseCriteria(get(rec, 'criteria'))
     if (unknown.length) issues.push({ line, level: 'warning', message: `Unrecognised criteria ignored: ${unknown.join(', ')}` })
+    if (!dateKey(get(rec, 'date')).exact) issues.push({ line, level: 'warning', message: `Date "${get(rec, 'date')}" is not clear; use YYYY-MM-DD so the latest call can be told` })
     const gene = get(rec, 'gene')
     out.push({ id: idGen(), variant: labVariantKey(variant, gene), ...(gene ? { gene } : {}), lab, cls, criteria: applied, ...(get(rec, 'date') ? { date: get(rec, 'date') } : {}), line, file })
   }
   return { rows: out, issues, total }
 }
 
-/** Groups lab rows by a normalised variant description: gene/transcript prefix kept, versions and p. dropped. */
+/** Groups lab rows by the canonical c. description ("c.5266dupC" is "c.5266dup"): gene/transcript prefix kept, versions and p. dropped. */
 export function labVariantKey(variant: string, gene?: string): string {
   const v = variant.trim().replace(/\s+\(?p\..*$/, '').replace(/\s+/g, '')
   const h = parseC(v.includes(':') || !gene ? v : `${gene}:${v}`)
   if (!h) return v
   const prefix = (h.gene ?? gene ?? h.transcript ?? '').replace(/\.\d+$/, '')
-  return `${prefix}:${v.replace(/^.*?(c\.)/, '$1')}`
+  return `${prefix}:${formatC(h, false)}`
+}
+
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+
+/**
+ * A date as sortable text: "2024-01-09", or as much as is known ("2024-01", "2024"). Reads ISO dates and the forms with a
+ * month name that ClinVar uses ("Jan 09, 2024"). `exact` is false for anything else: "03/04/2024" could be either month, so only its year is kept.
+ */
+export function dateKey(raw?: string): { key: string; exact: boolean } {
+  const s = (raw ?? '').trim()
+  if (!s || s === '-') return { key: '', exact: true }
+  const out = (y: string, m?: number, d?: string) => {
+    if (m === undefined) return { key: y, exact: true }
+    const day = d === undefined ? undefined : Number(d)
+    if (m < 1 || m > 12 || (day !== undefined && (day < 1 || day > new Date(Date.UTC(Number(y), m, 0)).getUTCDate()))) return { key: y, exact: false }
+    return { key: [y, String(m).padStart(2, '0'), ...(day === undefined ? [] : [String(day).padStart(2, '0')])].join('-'), exact: true }
+  }
+  let x: RegExpExecArray | null
+  if ((x = /^(\d{4})(?:[-/.](\d{1,2})(?:[-/.](\d{1,2})(?:[T ].*)?)?)?$/.exec(s))) return out(x[1], x[2] === undefined ? undefined : Number(x[2]), x[3])
+  const month = (w: string) => MONTHS.indexOf(w.slice(0, 3).toLowerCase()) + 1
+  if ((x = /^([a-z]{3,9})\.? (?:(\d{1,2}),? )?(\d{4})$/i.exec(s)) && month(x[1])) return out(x[3], month(x[1]), x[2])
+  if ((x = /^(\d{1,2})[ -]([a-z]{3,9})\.?[ -](\d{4})$/i.exec(s)) && month(x[2])) return out(x[3], month(x[2]), x[1])
+  return { key: /(?:^|\D)((?:19|20)\d{2})(?:\D|$)/.exec(s)?.[1] ?? '', exact: false }
 }
 
 // ---------- GTF / GFF3 ----------
