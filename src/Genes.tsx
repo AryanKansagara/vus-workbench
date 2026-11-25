@@ -5,7 +5,7 @@ import { fetchGeneModel, FLANK } from './engine/ensembl.ts'
 import { cdsBounds, hasReference } from './engine/transcript.ts'
 import { evaluateProject, snapshotOf } from './projectData.ts'
 import { context, geneCfg } from './projectData.ts'
-import { saveProject, type Project } from './store.ts'
+import { updateProject, type Project } from './store.ts'
 import { Link, toast } from './ui.tsx'
 
 const parseRegions = (s: string): [number, number][] => s.split(/[,;]/).map(x => x.trim()).filter(Boolean).map(x => x.split(/[-–]/).map(Number) as [number, number]).filter(([a, b]) => Number.isInteger(a) && Number.isInteger(b) && a <= b)
@@ -13,7 +13,7 @@ const parseRegions = (s: string): [number, number][] => s.split(/[,;]/).map(x =>
 export default function Genes({ project, evaluated }: { project: Project; evaluated: Evaluated[] }) {
   const genes = useMemo(() => [...new Set(evaluated.map(e => e.an.gene).filter(g => g !== '—'))].sort(), [evaluated])
   const ctx = context(project)
-  const set = (g: string, patch: Partial<GeneCfg>) => void saveProject({ ...project, genes: { ...project.genes, [g]: { ...geneCfg(project, g), ...patch } } })
+  const set = (g: string, patch: Partial<GeneCfg>) => void updateProject(project.id, p => ({ ...p, genes: { ...p.genes, [g]: { ...geneCfg(p, g), ...patch } } }))
   const num = (g: string, k: 'pm2Max' | 'bs1Min' | 'ba1Min', raw: string) => {
     const n = Number(raw)
     if (raw === '' || Number.isNaN(n) || n < 0 || n > 1) { toast('Frequencies must be between 0 and 1.', { tone: 'error' }); return }
@@ -24,20 +24,23 @@ export default function Genes({ project, evaluated }: { project: Project; evalua
   // Genes in the worklist with no model yet (synthetic genes are bundled).
   const missing = genes.filter(g => !ctx.txs.some(t => t.gene === g))
   const load = async (list: string[]) => {
-    let next = project
+    const models: Awaited<ReturnType<typeof fetchGeneModel>>[] = []
     const done: string[] = []
     for (const g of list) {
       setBusy(g)
       try {
         const m = await fetchGeneModel(g)
-        next = { ...next, transcripts: [...next.transcripts.filter(t => t.id !== m.transcript.id), m.transcript], genome: { ...next.genome, [m.key]: m.region } }
+        models.push(m)
         done.push(`${m.transcript.gene} ${m.transcript.id}`)
       } catch (e) { toast(`${g}: ${e instanceof Error ? e.message : 'could not be loaded'}`, { tone: 'error' }) }
     }
     setBusy(null)
     if (!done.length) return
-    next = { ...next, snapshots: [...next.snapshots, snapshotOf(evaluateProject(next), `After loading ${done.join(', ')}`)] }
-    await saveProject(next)
+    await updateProject(project.id, p => {
+      let next = p
+      for (const m of models) next = { ...next, transcripts: [...next.transcripts.filter(t => t.id !== m.transcript.id), m.transcript], genome: { ...next.genome, [m.key]: m.region } }
+      return { ...next, snapshots: [...next.snapshots, snapshotOf(evaluateProject(next), `After loading ${done.join(', ')}`)] }
+    })
     setSymbol('')
     toast(`Loaded ${done.join(', ')} with reference sequence. The worklist was re-annotated.`, { tone: 'ok' })
   }
@@ -87,7 +90,11 @@ export default function Genes({ project, evaluated }: { project: Project; evalua
                   <td className="num">{Number.isInteger(cdsBounds(t).aaLength) ? `${cdsBounds(t).aaLength} aa` : '?'}</td>
                   <td>{hasReference(ctx.genome, t) ? 'loaded' : <span className="muted">not loaded</span>}</td>
                   <td className="small">{t.synthetic ? 'Bundled synthetic' : t.source}</td>
-                  <td>{imported && <button type="button" className="btn danger-ghost sm" onClick={() => { const prev = project; void saveProject({ ...project, transcripts: project.transcripts.filter(x => x.id !== t.id), genome: Object.fromEntries(Object.entries(project.genome).filter(([k]) => k !== `${t.chrom}:${t.exons[0][0] - FLANK}-${t.exons[t.exons.length - 1][1] + FLANK}`)) }).then(() => toast(`Removed ${t.id}.`, { undo: () => void saveProject(prev) })) }}>Remove</button>}</td>
+                  <td>{imported && <button type="button" className="btn danger-ghost sm" onClick={() => {
+                    const key = `${t.chrom}:${t.exons[0][0] - FLANK}-${t.exons[t.exons.length - 1][1] + FLANK}`, region = project.genome[key]
+                    void updateProject(project.id, p => ({ ...p, transcripts: p.transcripts.filter(x => x.id !== t.id), genome: Object.fromEntries(Object.entries(p.genome).filter(([k]) => k !== key)) }))
+                      .then(() => toast(`Removed ${t.id}.`, { undo: () => void updateProject(project.id, p => ({ ...p, transcripts: [...p.transcripts.filter(x => x.id !== t.id), t], genome: region ? { ...p.genome, [key]: region } : p.genome })) }))
+                  }}>Remove</button>}</td>
                 </tr>
               )
             })}</tbody>

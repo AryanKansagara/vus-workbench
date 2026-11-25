@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { Evaluated } from './engine/pipeline.ts'
 import { compareSnapshots, snapshotOf } from './projectData.ts'
-import { saveProject, type Project } from './store.ts'
+import { updateProject, type Project } from './store.ts'
 import { deleteSnapshotCloud } from './sync.ts'
 import { Empty, fmtDateTime, Link, toast } from './ui.tsx'
 import { ClassBadge } from './viz.tsx'
@@ -64,9 +64,8 @@ export default function History({ project, evaluated }: { project: Project; eval
               <li key={s.id}>
                 <div><b>{s.label}</b><div className="muted small">{fmtDateTime(s.createdAt)} · {s.rows.length} variants</div></div>
                 <button type="button" className="btn danger-ghost sm" onClick={() => {
-                  const prev = project
-                  void saveProject({ ...project, snapshots: project.snapshots.filter(x => x.id !== s.id) }).then(() => {
-                    toast(`Deleted snapshot ${s.label}.`, { undo: () => void saveProject(prev), ttl: 8000 })
+                  void updateProject(project.id, p => ({ ...p, snapshots: p.snapshots.filter(x => x.id !== s.id) })).then(() => {
+                    toast(`Deleted snapshot ${s.label}.`, { undo: () => void updateProject(project.id, p => ({ ...p, snapshots: [...p.snapshots.filter(x => x.id !== s.id), s] })), ttl: 8000 })
                     // Undo re-saves the snapshot locally and the next sync uploads it again.
                     void deleteSnapshotCloud(s.id)
                   })

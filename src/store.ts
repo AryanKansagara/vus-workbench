@@ -93,14 +93,21 @@ export const getProject = (id: string) => projects.find(p => p.id === id)
 
 export async function saveProject(p: Project, opts: { touch?: boolean; silent?: boolean } = {}) {
   const next = opts.touch === false ? p : { ...p, updatedAt: Date.now() }
-  await idbPut('projects', next)
+  // In memory first, so an action that runs before the write is done already builds on this one.
   const i = projects.findIndex(x => x.id === p.id)
   if (i >= 0) projects[i] = next
   else projects.unshift(next)
   projects.sort((a, b) => b.updatedAt - a.updatedAt)
   emit()
+  await idbPut('projects', next)
   if (!opts.silent) changeHooks.forEach(f => f(next))
   return next
+}
+
+/** Changes the latest saved state of a project, not the copy a page was rendered from. Does nothing when the project is gone. */
+export async function updateProject(id: string, fn: (p: Project) => Project): Promise<Project | null> {
+  const p = getProject(id)
+  return p ? saveProject(fn(p)) : null
 }
 
 /** Deletes locally; returns an undo function that restores the project. */

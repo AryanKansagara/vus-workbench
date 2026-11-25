@@ -3,7 +3,7 @@ import { CRITERIA, DEF, fmtAf, fmtPosterior, pvs1, STRENGTH_SHORT, STRENGTHS, ty
 import type { Evaluated } from './engine/pipeline.ts'
 import { CONSEQUENCE_LABEL } from './engine/transcript.ts'
 import { curate, geneCfg } from './projectData.ts'
-import { editorName, saveProject, uuid, type Project } from './store.ts'
+import { editorName, uuid, type Project } from './store.ts'
 import { Empty, fmtDateTime, go, isTyping, Link, toast } from './ui.tsx'
 import { ClassBadge, Meter, SiteSeq, Track } from './viz.tsx'
 
@@ -26,12 +26,11 @@ export default function VariantView({ project, evaluated, vid }: { project: Proj
   const ev = an.rec.evidence
   const gene = geneCfg(project, an.gene)
   const act = (action: string, detail: string, fn: Parameters<typeof curate>[4], undo = false) => {
-    const prev = project
-    void curate(project, vid, action, detail, fn).then(() => { if (undo) toast(`${action}: ${detail}`, { undo: () => void saveProject(prev) }) })
+    void curate(project.id, vid, action, detail, fn).then(back => { if (undo) toast(`${action}: ${detail}`, { undo: () => void back() }) })
   }
   const setCrit = (c: CriterionState | undefined, code: string, patch: Partial<CriterionState>, action: string, detail: string) =>
     act(action, detail, ({ cur }) => {
-      const base: CriterionState = c ?? { code, met: false, strength: DEF[code].strength, evidence: '', source: 'curator', editor: '', at: 0 }
+      const base: CriterionState = cur.overrides[code] ?? c ?? { code, met: false, strength: DEF[code].strength, evidence: '', source: 'curator', editor: '', at: 0 }
       cur.overrides[code] = { ...base, ...patch, source: 'curator', editor: editorName(), at: Date.now() }
     }, true)
   const pv = a ? pvs1(a, gene) : null

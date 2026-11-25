@@ -3,7 +3,7 @@ import { autoMap, detectKind, FILE_KIND_LABEL, inIndex, variantIndex, LAB_FIELDS
 import type { Genome, Transcript } from './engine/transcript.ts'
 import { LAB_CSV, REAL_VARIANTS_CSV, SAMPLE_GTF, sampleVcf } from './engine/sample.ts'
 import { context, evaluateProject, snapshotOf } from './projectData.ts'
-import { saveProject, uuid, type Project } from './store.ts'
+import { updateProject, uuid, type Project } from './store.ts'
 import { download, go, Link, toast } from './ui.tsx'
 
 interface Pending { id: string; name: string; kind: FileKind; text: string; map: Mapping }
@@ -98,33 +98,35 @@ function PendingFile({ p, project, onMap, onDone }: { p: Pending; project: Proje
   const fields: FieldSpec[] | null = p.kind === 'lab-csv' ? LAB_FIELDS : p.kind === 'variant-csv' ? VARIANT_FIELDS : null
 
   const commit = async () => {
-    let next: Project = { ...project }
     let msg = ''
-    if (parsed.variants) {
-      // The same variant can arrive as a VCF record and as an HGVS description; either identity counts as already present.
-      const have = variantIndex(project.variants)
-      const fresh = parsed.variants.filter(v => !inIndex(have, v))
-      next.variants = [...project.variants, ...fresh]
-      msg = `Added ${fresh.length} variants${fresh.length < parsed.variants.length ? `, ${parsed.variants.length - fresh.length} already in the worklist` : ''}`
-    }
-    if (parsed.labRows) {
-      const sig = (r: LabRow) => `${r.variant}|${r.lab}|${r.date ?? ''}|${r.cls}`
-      const have = new Set(project.labRows.map(sig))
-      const fresh = parsed.labRows.filter(r => !have.has(sig(r)))
-      next.labRows = [...project.labRows, ...fresh]
-      msg = msg ? `${msg} and ${fresh.length} classifications for the lab comparison` : `Added ${fresh.length} lab calls`
-    }
-    if (parsed.transcripts) {
-      next.transcripts = [...project.transcripts.filter(t => !parsed.transcripts!.some(n => n.id === t.id)), ...parsed.transcripts]
-      msg = `Loaded ${parsed.transcripts.length} transcript models`
-    }
-    if (parsed.genome) {
-      next.genome = { ...project.genome, ...parsed.genome }
-      msg = `Loaded reference for ${Object.keys(parsed.genome).join(', ')}`
-    }
-    next.imports = [...project.imports, { id: uuid(), kind: p.kind, fileName: p.name, rows: ok, issues: parsed.issues.length, at: Date.now() }]
-    if (parsed.variants || parsed.transcripts || parsed.genome) next.snapshots = [...project.snapshots, snapshotOf(evaluateProject(next), `After importing ${p.name}`)]
-    await saveProject(next)
+    await updateProject(project.id, p0 => {
+      let next: Project = { ...p0 }
+      if (parsed.variants) {
+        // The same variant can arrive as a VCF record and as an HGVS description; either identity counts as already present.
+        const have = variantIndex(p0.variants)
+        const fresh = parsed.variants.filter(v => !inIndex(have, v))
+        next.variants = [...p0.variants, ...fresh]
+        msg = `Added ${fresh.length} variants${fresh.length < parsed.variants.length ? `, ${parsed.variants.length - fresh.length} already in the worklist` : ''}`
+      }
+      if (parsed.labRows) {
+        const sig = (r: LabRow) => `${r.variant}|${r.lab}|${r.date ?? ''}|${r.cls}`
+        const have = new Set(p0.labRows.map(sig))
+        const fresh = parsed.labRows.filter(r => !have.has(sig(r)))
+        next.labRows = [...p0.labRows, ...fresh]
+        msg = msg ? `${msg} and ${fresh.length} classifications for the lab comparison` : `Added ${fresh.length} lab calls`
+      }
+      if (parsed.transcripts) {
+        next.transcripts = [...p0.transcripts.filter(t => !parsed.transcripts!.some(n => n.id === t.id)), ...parsed.transcripts]
+        msg = `Loaded ${parsed.transcripts.length} transcript models`
+      }
+      if (parsed.genome) {
+        next.genome = { ...p0.genome, ...parsed.genome }
+        msg = `Loaded reference for ${Object.keys(parsed.genome).join(', ')}`
+      }
+      next.imports = [...p0.imports, { id: uuid(), kind: p.kind, fileName: p.name, rows: ok, issues: parsed.issues.length, at: Date.now() }]
+      if (parsed.variants || parsed.transcripts || parsed.genome) next.snapshots = [...p0.snapshots, snapshotOf(evaluateProject(next), `After importing ${p.name}`)]
+      return next
+    })
     onDone()
     toast(msg, { tone: 'ok' })
     if (parsed.variants) go(`/app/p/${project.id}`)
