@@ -140,9 +140,14 @@ test('#13 a GTF without stop_codon rows does not turn an in-frame deletion into 
   await importFile(page, 'list.csv', 'gene,hgvs_c\nMINI,c.5_7del\n')
   await expect(row(page, 'c.5_7del')).toContainText('p.(Ala2del)', { timeout: 5000 })
 })
-test.fail('#14 an insertion after the start codon is not start-lost', async ({ page }) => {
+test('#14 an insertion after the start codon is not start-lost', async ({ page }) => {
   await miniHgvs(page, ['MINI,c.3_4insA,'])
   await expect(row(page, 'c.3_4insA')).toContainText('Frameshift', { timeout: 5000 })
+})
+test("#14 an insertion before the start codon is 5' UTR", async ({ page }) => {
+  await miniHgvs(page, ['MINI,c.-1_1insA,', 'MINI,c.1A>G,'])
+  await expect(row(page, 'c.-1_1insA')).toContainText("5' UTR", { timeout: 5000 })
+  await expect(row(page, 'c.1A>G')).toContainText('Start lost')
 })
 test.fail('#15 an intron offset from the middle of an exon is refused', async ({ page }) => {
   // c.30 is inside exon 2, so c.30+5 is not a position. The base there happens to be the stated one.
