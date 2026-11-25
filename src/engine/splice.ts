@@ -102,7 +102,8 @@ export function spliceReport(t: Transcript, g: Genome, v: GVariant): SpliceRepor
   }
   let verdict: SpliceReport['verdict'] = 'none'
   const c = canonical
-  if (c.altScore < 0 || c.pct <= -60) verdict = 'disrupts'
+  // A site can score below 0 to begin with; only a drop disrupts it.
+  if ((c.altScore < 0 && c.delta < 0) || c.pct <= -60) verdict = 'disrupts'
   else if (c.pct <= -20) verdict = 'weakens'
   const cr = cryptic as SpliceReport['cryptic']
   if (verdict === 'none' && cr && cr.altScore >= c.altScore - 1) verdict = 'creates'
