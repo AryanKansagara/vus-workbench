@@ -1,5 +1,5 @@
 // Importers: VCF 4.x, CSV/TSV variant lists (HGVS), lab classification tables, GTF/GFF3 transcript subsets.
-import { norm, parseCsv, parseNum } from './csv.ts'
+import { norm, parseCsv, parseNum, type Csv } from './csv.ts'
 import { formatC, formatP, parseC, parseP } from './hgvs.ts'
 import { parseClass, parseCriteria, type Applied, type ClassName, type Evidence } from './acmg.ts'
 import { refAt, sameChrom, type Genome, type GVariant, type Transcript } from './transcript.ts'
@@ -358,13 +358,17 @@ export function toGt(raw: string): string | undefined {
   return undefined
 }
 
+/** Rows the CSV reader left out, as errors. */
+const badRows = (csv: Csv): Issue[] => (csv.bad ?? []).map(b => ({ ...b, level: 'error' }))
+
 export interface CsvVariantResult { variants: VariantRec[]; labRows: LabRow[]; issues: Issue[]; total: number }
 
-export function validateVariantCsv(csv: { rows: string[][]; lines: number[] }, map: Mapping, file: string, genome: Genome, idGen: () => string): CsvVariantResult {
-  const issues: Issue[] = []
+export function validateVariantCsv(csv: Csv, map: Mapping, file: string, genome: Genome, idGen: () => string): CsvVariantResult {
+  const issues: Issue[] = badRows(csv)
   const total = Math.max(0, csv.rows.length - 1)
+  if (!csv.rows.length && issues.length) return { variants: [], labRows: [], issues, total }
   const genomic = ['chrom', 'pos', 'ref', 'alt'].every(k => k in map)
-  if (!('hgvsC' in map) && !genomic) return { variants: [], labRows: [], issues: [{ line: 1, level: 'error', message: 'Map an HGVS c. column, or all four of chromosome, position, REF and ALT' }], total }
+  if (!('hgvsC' in map) && !genomic) return { variants: [], labRows: [], issues: [...issues, { line: 1, level: 'error', message: 'Map an HGVS c. column, or all four of chromosome, position, REF and ALT' }], total }
   if ('hgvsC' in map && !('gene' in map) && !('transcript' in map)) issues.push({ line: 1, level: 'warning', message: 'No gene or transcript column; HGVS values must carry a prefix such as NM_000059.4(BRCA2):c.68-7T>A' })
   const out: VariantRec[] = []
   const labRows: LabRow[] = []
@@ -438,11 +442,12 @@ export function validateVariantCsv(csv: { rows: string[][]; lines: number[] }, m
 
 export interface LabRow { id: string; variant: string; gene?: string; lab: string; cls: ClassName; criteria: Applied[]; date?: string; line: number; file: string }
 
-export function validateLabCsv(csv: { rows: string[][]; lines: number[] }, map: Mapping, file: string, idGen: () => string): { rows: LabRow[]; issues: Issue[]; total: number } {
-  const issues: Issue[] = []
+export function validateLabCsv(csv: Csv, map: Mapping, file: string, idGen: () => string): { rows: LabRow[]; issues: Issue[]; total: number } {
+  const issues: Issue[] = badRows(csv)
   const total = Math.max(0, csv.rows.length - 1)
+  if (!csv.rows.length && issues.length) return { rows: [], issues, total }
   for (const f of LAB_FIELDS) if (f.required && !(f.key in map)) issues.push({ line: 1, level: 'error', message: `Required column "${f.label}" is not mapped` })
-  if (issues.length) return { rows: [], issues, total }
+  if (LAB_FIELDS.some(f => f.required && !(f.key in map))) return { rows: [], issues, total }
   const out: LabRow[] = []
   const get = (rec: string[], k: string) => map[k] === undefined ? '' : (rec[map[k]] ?? '').trim()
   for (let r = 1; r < csv.rows.length; r++) {
