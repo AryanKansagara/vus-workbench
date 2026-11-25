@@ -122,7 +122,7 @@ export default function VariantView({ project, evaluated, vid }: { project: Proj
             <div className="card pad">
               <h3 className="h5">Other variants in {an.gene} ({an.rec.sample ?? 'same sample'})</h3>
               <ul className="plain">{e.partners.map(p => <li key={p.label}><span className={`phase ${p.phase}`}>{p.phase}</span> {p.label} <ClassBadge cls={p.cls} small /></li>)}</ul>
-              <p className="muted small">{gene.inheritance === 'AR' ? 'Recessive gene: in trans with P/LP gives PM3; in cis gives BP2.' : 'Dominant gene: in trans or in cis with a pathogenic variant gives BP2.'}</p>
+              <p className="muted small">{gene.inheritance === 'AR' ? 'Recessive gene: in trans with P/LP gives PM3; in cis gives BP2.' : gene.inheritance === 'XL' ? 'X-linked gene: in cis with a pathogenic variant gives BP2; in trans gives no criterion.' : 'Dominant gene: in trans or in cis with a pathogenic variant gives BP2.'}</p>
             </div>
           )}
         </div>

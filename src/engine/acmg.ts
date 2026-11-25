@@ -237,14 +237,15 @@ export function suggest(a: Annotation, ev: Evidence, gene: GeneCfg, splice: Spli
   }
 
   // Phase with other variants in the same gene.
-  for (const q of partners) {
-    const pathogenic = q.cls === 'Pathogenic' || q.cls === 'Likely pathogenic'
-    if (!pathogenic) continue
-    if (q.phase === 'cis') { add('BP2', 'Supporting', `In cis with ${q.cls.toLowerCase()} ${q.label}.`); break }
-    if (gene.inheritance === 'AR' && q.phase === 'trans') { add('PM3', 'Moderate', `In trans with ${q.cls.toLowerCase()} ${q.label} in a recessive gene.`); break }
-    if (gene.inheritance === 'AR' && q.phase === 'unknown') { add('PM3', 'Supporting', `With ${q.cls.toLowerCase()} ${q.label}, phase not confirmed (ClinGen SVI: Supporting).`); break }
-    if (gene.inheritance !== 'AR' && q.phase === 'trans') { add('BP2', 'Supporting', `In trans with ${q.cls.toLowerCase()} ${q.label} in a dominant gene.`); break }
-  }
+  const known = partners.filter(q => q.cls === 'Pathogenic' || q.cls === 'Likely pathogenic')
+  const inTrans = known.find(q => q.phase === 'trans'), inCis = known.find(q => q.phase === 'cis')
+  // PM3 counts the best partner of this proband (ClinGen SVI PM3 v1.0): in trans 1 point = Moderate; phase unknown 0.5 with P = Supporting, 0.25 with LP = below Supporting.
+  const unphased = known.find(q => q.phase === 'unknown' && q.cls === 'Pathogenic')
+  if (gene.inheritance === 'AR' && inTrans) add('PM3', 'Moderate', `In trans with ${inTrans.cls.toLowerCase()} ${inTrans.label} in a recessive gene.`)
+  else if (gene.inheritance === 'AR' && unphased) add('PM3', 'Supporting', `With ${unphased.cls.toLowerCase()} ${unphased.label}, phase not confirmed (ClinGen SVI: 0.5 points, Supporting).`)
+  // BP2 (Richards 2015): in cis under any inheritance, in trans only for a fully penetrant dominant disorder.
+  if (inCis) add('BP2', 'Supporting', `In cis with ${inCis.cls.toLowerCase()} ${inCis.label}.`)
+  else if (gene.inheritance === 'AD' && inTrans) add('BP2', 'Supporting', `In trans with ${inTrans.cls.toLowerCase()} ${inTrans.label} in a dominant gene.`)
   return out
 }
 

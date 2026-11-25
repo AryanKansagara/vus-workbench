@@ -68,7 +68,7 @@ test('#7 a c. description on another transcript is not placed on the loaded one'
   await miniHgvs(page, ['MINI,NM_900002.1,c.11G>A'], 'gene,transcript,hgvs_c')
   await expect(page.locator('table.worklist')).not.toContainText('p.(Trp4Ter)', { timeout: 5000 })
 })
-test.fail('#8 PM3 does not depend on row order', async ({ page }) => {
+test('#8 PM3 does not depend on row order', async ({ page }) => {
   await withMini(page)
   // Two likely pathogenic partners: one unphased, one in trans. SVI PM3 v1.0: in trans is 1.0 point, Moderate.
   await importFile(page, 'a.vcf', vcf([v(1022, 'G', 'T', 'AF_popmax=0', '0/1'), v(1026, 'G', 'A', 'AF_popmax=0', '0|1'), v(1086, 'C', 'T', 'AF_popmax=0', '1|0')]))
@@ -77,7 +77,7 @@ test.fail('#8 PM3 does not depend on row order', async ({ page }) => {
   await tab(page, 'Worklist')
   await expect(crit(page, 'c.31C>T')).toHaveText(['PM2', 'PM3'], { timeout: 5000 })
 })
-test.fail('#8 an unphased likely pathogenic partner is 0.25 points, below Supporting', async ({ page }) => {
+test('#8 an unphased likely pathogenic partner is 0.25 points, below Supporting', async ({ page }) => {
   await withMini(page)
   await importFile(page, 'a.vcf', vcf([v(1026, 'G', 'A'), v(1086, 'C', 'T')]))
   await tab(page, 'Genes')
