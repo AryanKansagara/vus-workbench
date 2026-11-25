@@ -64,7 +64,7 @@ test.fail('#6 the latest call wins with ClinVar dates', async ({ page }) => {
   await importFile(page, 'labs.csv', 'variant,lab,classification,date_evaluated\nBRCA2:c.1A>G,A,Benign,"Jan 09, 2024"\nBRCA2:c.1A>G,A,Pathogenic,"Sep 18, 2019"\n')
   await expect(page.locator('.disc .cls-row .cls')).toHaveText(['B'], { timeout: 5000 })
 })
-test.fail('#7 a c. description on another transcript is not placed on the loaded one', async ({ page }) => {
+test('#7 a c. description on another transcript is not placed on the loaded one', async ({ page }) => {
   await miniHgvs(page, ['MINI,NM_900002.1,c.11G>A'], 'gene,transcript,hgvs_c')
   await expect(page.locator('table.worklist')).not.toContainText('p.(Trp4Ter)', { timeout: 5000 })
 })
