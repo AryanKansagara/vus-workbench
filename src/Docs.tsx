@@ -53,7 +53,7 @@ zcat gencode.v47.annotation.gtf.gz | grep 'transcript_id "ENST00000380152' > brc
 
 # Reference region (samtools faidx output keeps the coordinates in the header)
 samtools faidx GRCh38.fa chr13:32310000-32410000 > brca2.region.fa`} />
-        <p>Contig names match with or without the <span className="mono">chr</span> prefix. Ensembl GTF CDS rows exclude the stop codon; include the <span className="mono">stop_codon</span> rows (grep keeps them) so the CDS length is a multiple of three.</p>
+        <p>Contig names match with or without the <span className="mono">chr</span> prefix. Ensembl GTF CDS rows exclude the stop codon; include the <span className="mono">stop_codon</span> rows (grep keeps them). Without them the stop is read from the reference sequence when it directly follows the CDS; if no stop is found there, protein effects are not predicted and the variant says so.</p>
         <button type="button" className="btn ghost sm" onClick={() => download('synthetic-genes.gtf', SAMPLE_GTF, 'text/plain')}>Download the synthetic GTF</button>
 
         <h2 id="rules">Rules and dated assumptions</h2>

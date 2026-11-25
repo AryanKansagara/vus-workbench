@@ -127,7 +127,7 @@ test.fail('#12 a VCF row with fewer columns than the header is reported', async 
   await choose(page, 'cut.vcf', vcf([]) + 'chr9\t1086\t.\tC\tT\t60\tPASS\tAF_popmax=0')
   await expect(issues(page, 'cut.vcf').locator('li.error')).toHaveCount(1, { timeout: 5000 })
 })
-test.fail('#13 a GTF without stop_codon rows does not turn an in-frame deletion into a stop', async ({ page }) => {
+test('#13 a GTF without stop_codon rows does not turn an in-frame deletion into a stop', async ({ page }) => {
   await newWorklist(page)
   await importFile(page, 'mini.fa', MINI_FASTA)
   await importFile(page, 'mini.gtf', MINI_GTF.split('\n').filter((l) => !l.includes('stop_codon')).join('\n'))
