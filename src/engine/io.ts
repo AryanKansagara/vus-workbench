@@ -1,5 +1,5 @@
 // Importers: VCF 4.x, CSV/TSV variant lists (HGVS), lab classification tables, GTF/GFF3 transcript subsets.
-import { norm, parseCsv, parseNum, type Csv } from './csv.ts'
+import { norm, parseCsv, parseNum, uninert, type Csv } from './csv.ts'
 import { formatC, formatP, parseC, parseP } from './hgvs.ts'
 import { parseClass, parseCriteria, type Applied, type ClassName, type Evidence } from './acmg.ts'
 import { refAt, sameChrom, type Genome, type GVariant, type Transcript } from './transcript.ts'
@@ -450,7 +450,7 @@ export function validateLabCsv(csv: Csv, map: Mapping, file: string, idGen: () =
   for (const f of LAB_FIELDS) if (f.required && !(f.key in map)) issues.push({ line: 1, level: 'error', message: `Required column "${f.label}" is not mapped` })
   if (LAB_FIELDS.some(f => f.required && !(f.key in map))) return { rows: [], issues, total }
   const out: LabRow[] = []
-  const get = (rec: string[], k: string) => map[k] === undefined ? '' : (rec[map[k]] ?? '').trim()
+  const get = (rec: string[], k: string) => map[k] === undefined ? '' : uninert((rec[map[k]] ?? '').trim()).trim()
   for (let r = 1; r < csv.rows.length; r++) {
     const rec = csv.rows[r], line = csv.lines[r]
     const variant = get(rec, 'variant'), lab = get(rec, 'lab'), clsRaw = get(rec, 'classification')
