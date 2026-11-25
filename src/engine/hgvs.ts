@@ -72,7 +72,7 @@ export function lengthChange(h: HgvsC): number | null {
 // ---------- Protein ----------
 
 export type PKind = 'missense' | 'nonsense' | 'synonymous' | 'frameshift' | 'inframe_del' | 'inframe_ins' | 'inframe_delins' | 'start_lost' | 'stop_lost' | 'unknown'
-export interface HgvsP { kind: PKind; pos?: number; ref?: string; alt?: string; fsTer?: number; predicted: boolean }
+export interface HgvsP { kind: PKind; pos?: number; ref?: string; alt?: string; fsTer?: number; predicted: boolean; /** Codon of the new stop when a p. insertion or delins ends in one. */ stopAt?: number }
 
 const AA = '(?:[A-Z][a-z]{2}|[A-Z*])'
 const toOne = (s: string) => s.length === 1 ? (s === 'X' ? '*' : s) : (AA1[s] ?? 'X')
@@ -100,11 +100,13 @@ export function parseP(raw: string): HgvsP | null {
     const kind: PKind = alt === '*' ? 'nonsense' : ref === '*' ? 'stop_lost' : ref === alt ? 'synonymous' : +m[2] === 1 && ref === 'M' ? 'start_lost' : 'missense'
     return { kind, pos: +m[2], ref, alt, predicted }
   }
-  if ((m = new RegExp(`^(${AA})(\\d+)(?:_(${AA})(\\d+))?(del|dup|ins|delins)([A-Za-z*]*)$`).exec(s))) {
+  if ((m = new RegExp(`^(${AA})(\\d+)(?:_(${AA})(\\d+))?(delins|del|dup|ins)([A-Za-z*]*)$`).exec(s))) {
     const op = m[5]
     const alt = m[6] ? (m[6].match(/[A-Z][a-z]{2}|[A-Z*]/g) ?? []).map(toOne).join('') : undefined
-    const kind: PKind = op === 'del' ? 'inframe_del' : op === 'delins' ? (alt?.includes('*') ? 'nonsense' : 'inframe_delins') : 'inframe_ins'
-    return { kind, pos: +m[2], ref: toOne(m[1]), ...(alt ? { alt } : {}), predicted }
+    // An insertion sits after the first named residue, a delins starts at it.
+    const stop = op === 'ins' || op === 'delins' ? alt?.indexOf('*') ?? -1 : -1
+    const kind: PKind = stop >= 0 ? 'nonsense' : op === 'del' ? 'inframe_del' : op === 'delins' ? 'inframe_delins' : 'inframe_ins'
+    return { kind, pos: +m[2], ref: toOne(m[1]), ...(alt ? { alt } : {}), predicted, ...(stop >= 0 ? { stopAt: +m[2] + stop + (op === 'ins' ? 1 : 0) } : {}) }
   }
   return null
 }

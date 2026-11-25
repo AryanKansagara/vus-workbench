@@ -21,7 +21,7 @@ test.fail('#2 a deletion of a whole exon is not intronic', async ({ page }) => {
   await miniHgvs(page, ['MINI,c.16-20_75+18del,0'])
   await expect(crit(page, 'c.16-20_75+18del')).toHaveText(['PVS1_Strong', 'PM2'], { timeout: 5000 })
 })
-test.fail('#3 an in-frame insertion that brings a stop codon is a null variant', async ({ page }) => {
+test('#3 an in-frame insertion that brings a stop codon is a null variant', async ({ page }) => {
   // ATG GCT + GAT TAA: stop at codon 4, before the last 50 nt of exon 2. PVS1 8 + PM2 1.
   await miniHgvs(page, ['MINI,c.6_7insGATTAA,0'])
   await expect(crit(page, 'c.6_7ins')).toHaveText(['PVS1', 'PM2'], { timeout: 5000 })
