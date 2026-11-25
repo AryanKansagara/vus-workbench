@@ -172,7 +172,7 @@ test('#16 skipping an exon in a critical region is PVS1_Strong even under 10%', 
   await tab(page, 'Worklist')
   await expect(crit(page, 'c.96+1T>G')).toHaveText(['PVS1_Strong'], { timeout: 5000 })
 })
-test.fail('#17 a change that raises the score of a weak native site is not called abolishing', async ({ page }) => {
+test('#17 a change that raises the score of a weak native site is not called abolishing', async ({ page }) => {
   // ODD's exon 3 acceptor has no AG, so its native score is negative. T>C at -3 moves towards the consensus (C 75%, T 19%).
   await odd(page, ['ODD,c.97-3T>C'])
   await expect(crit(page, 'c.97-3T>C')).toHaveCount(0, { timeout: 5000 })
