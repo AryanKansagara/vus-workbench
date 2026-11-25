@@ -105,7 +105,7 @@ test('#9 an OddsPath against the stated result gives no point and a message', as
   await expect(page.locator('.crit-row').filter({ hasText: 'PS3' })).toContainText('OddsPath 0.04 points to BS3, against the stated damaging result', { timeout: 5000 })
   await expect(page.locator('.sticky')).toContainText('0 pts')
 })
-test.fail('#10 a percent sign in a GFF3 note does not take the page down', async ({ page }) => {
+test('#10 a percent sign in a GFF3 note does not take the page down', async ({ page }) => {
   await newWorklist(page)
   // Feeds the file without leaving an uncaught error behind: the crash itself removes the page.
   await page.evaluate(() => addEventListener('error', (e) => e.preventDefault()))

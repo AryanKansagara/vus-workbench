@@ -103,7 +103,8 @@ const ANN_FIELDS = ['Allele', 'Annotation', 'Annotation_Impact', 'Gene_Name', 'G
 
 interface TxAnnotation { gene?: string; transcript?: string; hgvsC?: string; hgvsP?: string; af?: number; revel?: number; spliceAi?: number }
 
-const pct = (s: string) => { try { return decodeURIComponent(s) } catch { return s } }
+/** Percent-decodes; a "%" that does not start a valid escape is kept as text. */
+const pct = (s: string) => s.replace(/(?:%[0-9a-f]{2})+/gi, m => { try { return decodeURIComponent(m) } catch { return m } })
 const maxOf = (vals: (string | undefined)[]) => { const n = vals.flatMap(v => (v ?? '').split('&')).filter(v => v.trim() !== '').map(Number).filter(x => !Number.isNaN(x) && x >= 0); return n.length ? Math.max(...n) : undefined }
 
 /**
@@ -509,7 +510,7 @@ export function parseGtf(text: string, source: string): { transcripts: Transcrip
     if (!Number.isInteger(start) || !Number.isInteger(end) || start > end) { issues.push({ line: i + 1, level: 'error', message: 'Start/end are not valid coordinates' }); continue }
     const a: Record<string, string> = {}
     for (const m of attr.matchAll(/(\w+)\s+"([^"]*)"/g)) a[m[1]] = m[2]
-    for (const kv of attr.split(';')) { const k = kv.indexOf('='); if (k > 0) a[kv.slice(0, k).trim()] = decodeURIComponent(kv.slice(k + 1).trim()) }
+    for (const kv of attr.split(';')) { const k = kv.indexOf('='); if (k > 0) a[kv.slice(0, k).trim()] = pct(kv.slice(k + 1).trim()) }
     if (type === 'gene' && a.ID) geneNames.set(a.ID, a.Name ?? a.gene_name ?? a.ID)
     if (type === 'mRNA' || type === 'transcript') {
       const id = (a.transcript_id ?? a.ID ?? '').replace(/^transcript:/, '')
