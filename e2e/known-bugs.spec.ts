@@ -112,7 +112,7 @@ test('#10 a percent sign in a GFF3 note does not take the page down', async ({ p
   await choose(page, 'a.gff3', MINI_GFF3.replace('ID=g1;', 'ID=g1;Note=100% match;'))
   await expect(importBtn(page, 'a.gff3')).toBeEnabled({ timeout: 5000 })
 })
-test.fail('#11 an unclosed quote does not pass another row off as criteria', async ({ page }) => {
+test('#11 an unclosed quote does not pass another row off as criteria', async ({ page }) => {
   await newWorklist(page)
   await choose(page, 'labs.csv', 'variant,lab,classification,criteria\nBRCA2:c.1A>G,A,VUS,"PM2\nBRCA2:c.1A>G,B,Pathogenic,PVS1\n')
   await expect(issues(page, 'labs.csv').locator('li.error')).toHaveCount(1, { timeout: 5000 })
