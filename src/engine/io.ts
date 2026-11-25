@@ -239,9 +239,19 @@ export function parseVcf(text: string, file: string, genome: Genome, idGen: () =
       const tx = infoMap.CSQ && csqFields ? pickAnnotation(infoMap.CSQ, csqFields, alt, ai + 1, alts.length) : infoMap.ANN ? pickAnnotation(infoMap.ANN, ANN_FIELDS, alt, ai + 1, alts.length) : null
       if (tx) meta.annotation = infoMap.CSQ ? 'VEP CSQ' : 'SnpEff ANN'
       const afKey = AF_KEYS.find(k => pick(k) !== undefined && k !== 'AF')
-      const af = afKey ? parseNum(pick(afKey)!) : tx?.af ?? NaN
-      const revel = parseNum(pick('REVEL') ?? pick('REVEL_score') ?? String(tx?.revel ?? ''))
+      const score = (key: string, raw: string | undefined) => {
+        const s = (raw ?? '').trim()
+        if (!s || s === '.' || /^(na|nan)$/i.test(s)) return NaN
+        const n = parseNum(s)
+        if (n >= 0 && n <= 1) return n
+        issues.push({ line: ln, level: 'warning', message: `${key} "${s}" ignored (expected 0 to 1)` })
+        return NaN
+      }
+      const revelKey = pick('REVEL') !== undefined ? 'REVEL' : 'REVEL_score'
+      const af = afKey ? score(afKey, pick(afKey)) : tx?.af ?? NaN
+      const revel = pick(revelKey) !== undefined ? score(revelKey, pick(revelKey)) : tx?.revel ?? NaN
       const sai = infoMap.SpliceAI ? spliceAiMax(infoMap.SpliceAI, alt) : tx?.spliceAi ?? NaN
+      if (infoMap.SpliceAI && Number.isNaN(sai)) issues.push({ line: ln, level: 'info', message: `SpliceAI has no usable score for ${alt}; left blank` })
       const rec: VariantRec = {
         id: idGen(), key, g, source: { file, line: ln, kind: 'vcf' },
         evidence: { popmaxAf: Number.isNaN(af) ? null : af, revel: Number.isNaN(revel) ? null : revel, spliceAi: Number.isNaN(sai) ? null : sai, functional: [] },
@@ -280,7 +290,11 @@ export function spliceAiMax(raw: string, alt: string): number {
   for (const e of raw.split(',')) {
     const p = e.split('|')
     if (p.length < 6 || (p[0] !== alt && p[0] !== '.')) continue
-    const m = Math.max(...p.slice(2, 6).map(Number).filter(x => !Number.isNaN(x)))
+    // SpliceAI writes "." for an allele it cannot score: no score, not a low one.
+    const ds = p.slice(2, 6).map(parseNum).filter(x => x >= 0 && x <= 1)
+    // With some sub-scores missing, a damaging score still stands but a low one proves nothing.
+    const top = ds.length ? Math.max(...ds) : NaN
+    const m = ds.length === 4 || top >= 0.2 ? top : NaN
     if (!Number.isNaN(m) && (Number.isNaN(best) || m > best)) best = m
   }
   return best

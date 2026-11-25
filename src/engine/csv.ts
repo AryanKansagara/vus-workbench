@@ -45,10 +45,10 @@ function sniffDelimiter(text: string): string {
   return counts.sort((a, b) => b[1] - a[1])[0][0]
 }
 
+/** A plain decimal or scientific number. A decimal comma is read when nothing else fits ("0,0001"); grouped or ambiguous forms ("1,000") and other notations are not numbers here. */
 export function parseNum(raw: string): number {
-  const s = raw.trim().replace(/[,\s$]/g, '')
-  if (s === '' || /^null$/i.test(s)) return NaN
-  return Number(s)
+  const s = raw.trim().replace(/^([+-]?)0,(\d+(?:e[+-]?\d+)?)$/i, '$10.$2')
+  return /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(s) ? Number(s) : NaN
 }
 
 export function toCsv(rows: (string | number)[][]): string {

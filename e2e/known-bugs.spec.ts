@@ -26,19 +26,19 @@ test.fail('#3 an in-frame insertion that brings a stop codon is a null variant',
   await miniHgvs(page, ['MINI,c.6_7insGATTAA,0'])
   await expect(crit(page, 'c.6_7ins')).toHaveText(['PVS1', 'PM2'], { timeout: 5000 })
 })
-test.fail('#4 a decimal comma is not read as a frequency of 100%', async ({ page }) => {
+test('#4 a decimal comma is not read as a frequency of 100%', async ({ page }) => {
   await withMini(page)
   await importFile(page, 'eu.csv', 'gene;hgvs_c;popmax_af\nMINI;c.31C>T;0,0001\n')
   await expect(crit(page, 'c.31C>T')).toHaveText(['PM2'], { timeout: 5000 })
 })
-test.fail('#4 SpliceAI without a score is not benign evidence', async ({ page }) => {
+test('#4 SpliceAI without a score is not benign evidence', async ({ page }) => {
   // SpliceAI writes "ALT|GENE|.|.|.|.|.|.|.|." for alleles it cannot score.
   await withMini(page)
   await importFile(page, 'a.vcf', vcf([v(1109, 'T', 'C', 'AF_popmax=0;SpliceAI=C|MINI|.|.|.|.|.|.|.|.')]))
   // BP7 rests on the local splice model here; BP4 needs a SpliceAI score.
   await expect(crit(page, 'c.54T>C')).toHaveText(['PM2', 'BP7'], { timeout: 5000 })
 })
-test.fail('#4 scores outside 0 to 1 in a VCF are refused', async ({ page }) => {
+test('#4 scores outside 0 to 1 in a VCF are refused', async ({ page }) => {
   await withMini(page)
   await importFile(page, 'a.vcf', vcf([v(1086, 'C', 'T', 'AF_popmax=-1;REVEL=7')]))
   await expect(crit(page, 'c.31C>T')).toHaveCount(0, { timeout: 5000 })
