@@ -185,7 +185,7 @@ test('#19 a duplicated residue is named dup', async ({ page }) => {
   await miniHgvs(page, ['MINI,c.31_33dup,0'])
   await expect(row(page, 'c.31_33dup')).toContainText('p.(Arg11dup)', { timeout: 5000 })
 })
-test.fail('#20 the same variant in two samples is compared twice', async ({ page }) => {
+test('#20 the same variant in two samples is compared twice', async ({ page }) => {
   await miniHgvs(page, ['MINI,c.31C>T,0,S1', 'MINI,c.31C>T,0.2,S2'], 'gene,hgvs_c,popmax_af,sample')
   await page.getByRole('button', { name: 'Save snapshot' }).click()
   await tab(page, 'History')
