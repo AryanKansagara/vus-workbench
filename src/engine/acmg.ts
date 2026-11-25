@@ -218,8 +218,8 @@ export function suggest(a: Annotation, ev: Evidence, gene: GeneCfg, splice: Spli
     if (comp) add(comp.code, comp.strength, comp.reason)
 
     const noSplice = ev.spliceAi !== null ? ev.spliceAi <= 0.1 : splice ? splice.verdict === 'none' : false
-    const deepIntronic = a.consequence === 'intronic' && a.intronOffset !== undefined && (a.intronOffset >= 7 || a.intronOffset <= -21)
-    if ((a.consequence === 'synonymous' && !a.spliceRegion || deepIntronic) && noSplice) add('BP7', 'Supporting', `${a.consequence === 'synonymous' ? 'Synonymous' : 'Deep intronic'} with no predicted splice impact (${ev.spliceAi !== null ? `SpliceAI ${ev.spliceAi}` : 'local PWM model'}).`)
+    // BP7 for intronic positions at or beyond +7 and -21 (ClinGen SVI splicing, Walker et al. 2023).
+    if ((a.consequence === 'synonymous' && !a.spliceRegion || a.bp7Intronic) && noSplice) add('BP7', 'Supporting', `${a.consequence === 'synonymous' ? 'Synonymous' : 'Intronic at or beyond +7 / -21'} with no predicted splice impact (${ev.spliceAi !== null ? `SpliceAI ${ev.spliceAi}` : 'local PWM model'}).`)
   }
 
   if (['inframe_deletion', 'inframe_insertion', 'inframe_delins', 'stop_lost'].includes(a.consequence) && !isNull) add('PM4', 'Moderate', a.consequence === 'stop_lost' ? 'Stop-loss extends the protein.' : 'In-frame length change; confirm it is not in a repeat region (else BP3).')

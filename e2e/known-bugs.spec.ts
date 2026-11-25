@@ -177,7 +177,7 @@ test('#17 a change that raises the score of a weak native site is not called abo
   await odd(page, ['ODD,c.97-3T>C'])
   await expect(crit(page, 'c.97-3T>C')).toHaveCount(0, { timeout: 5000 })
 })
-test.fail('#18 BP7 starts at intron position +7', async ({ page }) => {
+test('#18 BP7 starts at intron position +7', async ({ page }) => {
   await miniHgvs(page, ['MINI,c.75+7T>C,0.001,0'], 'gene,hgvs_c,popmax_af,spliceai')
   await expect(crit(page, 'c.75+7T>C')).toHaveText(['BP4', 'BP7'], { timeout: 5000 })
 })
