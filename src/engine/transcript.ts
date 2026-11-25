@@ -350,6 +350,8 @@ export interface Annotation {
   nmd?: boolean | null
   /** Fraction of the protein removed by truncation or in-frame skipping of the affected exon. */
   removedFraction?: number | null
+  /** First and last residue touched by exon skipping; to the end of the protein when the frame is lost. */
+  lostAa?: [number, number]
   /** For canonical splice variants: whether skipping the adjacent exon keeps the frame. */
   skipInFrame?: boolean | null
   /** Variant lies in the last exon or within 50 nt of the last exon-exon junction. */
@@ -490,9 +492,14 @@ export function annotate(t: Transcript, g: Genome, h: HgvsC, v?: GVariant | null
   if (isSplice && !hit.length && loc.intron !== undefined) hit.push(a.consequence === 'splice_donor' ? loc.intron : loc.intron + 1)
   if (hit.length) {
     const first = ex[hit[0]]
+    let from = 0, to = 0
     const coding = hit.reduce((sum, i) => {
       const ea = gToTx(t, t.strand === 1 ? ex[i][0] : ex[i][1])!, eb = ea + exLen(ex[i]) - 1
-      return sum + Math.max(0, Math.min(eb, cds.end) - Math.max(ea, cds.start) + 1)
+      const a = Math.max(ea, cds.start), b = Math.min(eb, cds.end)
+      if (b < a) return sum
+      from ||= a
+      to = b
+      return sum + b - a + 1
     }, 0)
     const ea = gToTx(t, t.strand === 1 ? first[0] : first[1])!
     a.skipInFrame = coding % 3 === 0
@@ -500,6 +507,7 @@ export function annotate(t: Transcript, g: Genome, h: HgvsC, v?: GVariant | null
     a.lastExonRegion = hit[hit.length - 1] >= ex.length - 2
     a.nmd = a.skipInFrame ? false : !a.lastExonRegion
     a.removedFraction = a.skipInFrame ? coding / 3 / cds.aaLength : Math.max(0, (cds.end - Math.max(ea, cds.start) + 1) / 3 / cds.aaLength)
+    if (coding) a.lostAa = [Math.floor((from - cds.start) / 3) + 1, a.skipInFrame ? Math.floor((to - cds.start) / 3) + 1 : Math.ceil(cds.aaLength)]
     const frame = a.skipInFrame ? 'in frame' : 'out of frame'
     a.notes.push(hit.length === 1 ? `Predicted to skip exon ${hit[0] + 1} (${exLen(first)} nt, ${frame}).` : `Predicted to lose exons ${hit.map(i => i + 1).join(', ')} (${frame}).`)
   }
