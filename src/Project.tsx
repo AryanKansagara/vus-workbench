@@ -3,8 +3,8 @@ import { CLASSES, CLASS_SHORT, critLabel, fmtAf, vusTier, type ClassName } from 
 import { labVariantKey } from './engine/io.ts'
 import { phaseOf, type Evaluated } from './engine/pipeline.ts'
 import { CONSEQUENCE_LABEL } from './engine/transcript.ts'
-import { curatedCsv, geneCfg, snapshotOf, useProject, worklistCsv } from './projectData.ts'
-import { getDefaults, saveProject, type Project } from './store.ts'
+import { curatedCsv, evaluateProject, geneCfg, snapshotOf, useProject, worklistCsv } from './projectData.ts'
+import { getDefaults, updateProject, type Project } from './store.ts'
 import { download, Empty, go, isTyping, Link, slug, SyntheticBadge, toast } from './ui.tsx'
 import { ClassBadge } from './viz.tsx'
 
@@ -29,12 +29,12 @@ export default function ProjectView({ id, tab, vid }: { id: string; tab: string;
         <div>
           <p className="eyebrow"><Link href="/app">Worklists</Link> /</p>
           <h1 className="proj-title">
-            <input aria-label="Worklist name" defaultValue={project.name} key={project.name} onBlur={e => { const v = e.target.value.trim(); if (v && v !== project.name) void saveProject({ ...project, name: v }) }} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} />
+            <input aria-label="Worklist name" defaultValue={project.name} key={project.name} onBlur={e => { const v = e.target.value.trim(); if (v && v !== project.name) void updateProject(project.id, p => ({ ...p, name: v })) }} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} />
             {project.sampleId && <SyntheticBadge />}
           </h1>
         </div>
         <div className="row gap-sm wrap">
-          <button type="button" className="btn ghost sm" onClick={() => { void saveProject({ ...project, snapshots: [...project.snapshots, snapshotOf(evaluated, `Snapshot ${new Date().toLocaleDateString('en-GB')}`)] }); toast('Snapshot saved. Compare it in History.', { tone: 'ok' }) }}>Save snapshot</button>
+          <button type="button" className="btn ghost sm" onClick={() => { void updateProject(project.id, p => ({ ...p, snapshots: [...p.snapshots, snapshotOf(evaluateProject(p), `Snapshot ${new Date().toLocaleDateString('en-GB')}`)] })); toast('Snapshot saved. Compare it in History.', { tone: 'ok' }) }}>Save snapshot</button>
           <Link href={`/app/p/${project.id}/report`} className="btn ghost sm">Worklist report</Link>
         </div>
       </div>

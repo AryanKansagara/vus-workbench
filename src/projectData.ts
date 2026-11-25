@@ -5,7 +5,7 @@ import { autoMap, LAB_FIELDS, parseCsv, parseVcf, validateLabCsv, validateVarian
 import { analyse, evaluateAll, newCuration, type Curation, type Evaluated } from './engine/pipeline.ts'
 import { BUNDLED_GENES, BUNDLED_GENOME, BUNDLED_TRANSCRIPTS, LAB_CSV, REAL_VARIANTS_CSV, SAMPLES, sampleVcf } from './engine/sample.ts'
 import { CONSEQUENCE_LABEL } from './engine/transcript.ts'
-import { defaultGene, editorName, getProjects, saveProject, useProjects, uuid, type Project, type Snapshot } from './store.ts'
+import { defaultGene, editorName, getProject, getProjects, saveProject, updateProject, useProjects, uuid, type Project, type Snapshot } from './store.ts'
 
 export const context = (p: Project) => ({
   txs: [...p.transcripts, ...BUNDLED_TRANSCRIPTS.filter(b => !p.transcripts.some(t => t.id === b.id))],
@@ -47,8 +47,39 @@ export function applyCuration(p: Project, vid: string, action: string, detail: s
   return next
 }
 
-export const curate = (p: Project, vid: string, action: string, detail: string, fn: (d: { rec: VariantRec; cur: Curation }) => void) =>
-  saveProject(applyCuration(p, vid, action, detail, fn))
+/** Applies a curation action to the latest saved worklist. Resolves to a function that undoes this action only. */
+export async function curate(id: string, vid: string, action: string, detail: string, fn: (d: { rec: VariantRec; cur: Curation }) => void): Promise<() => Promise<unknown>> {
+  const before = getProject(id)
+  if (!before?.variants.some(v => v.id === vid)) return async () => {}
+  const after = applyCuration(before, vid, action, detail, fn)
+  await saveProject(after)
+  return () => updateProject(id, p => undoCuration(p, before, after, vid, `${action}: ${detail}`))
+}
+
+/**
+ * Takes one action (`before` to `after`) out of the latest project. When nothing else happened to the variant, its record and log
+ * go back as they were. Otherwise what the action changed is put back, unless it was changed again since, as a logged action of its own.
+ */
+export function undoCuration(p: Project, before: Project, after: Project, vid: string, what: string): Project {
+  const recOf = (x: Project) => x.variants.find(v => v.id === vid)
+  const now = recOf(p), was = recOf(before), then = recOf(after)
+  if (!now || !was || !then) return p
+  if (p.curation[vid] === after.curation[vid] && now === then) {
+    const { [vid]: _, ...rest } = p.curation
+    return { ...p, variants: p.variants.map(v => v.id === vid ? was : v), curation: before.curation[vid] ? { ...rest, [vid]: before.curation[vid] } : rest }
+  }
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+  const a = before.curation[vid]?.overrides ?? {}, b = after.curation[vid]?.overrides ?? {}, latest = p.curation[vid]?.overrides ?? {}
+  const codes = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter(c => !same(a[c], b[c]) && same(b[c], latest[c]))
+  const lost = was.evidence.functional.filter(f => !then.evidence.functional.some(x => x.id === f.id))
+  const gained = new Set(then.evidence.functional.filter(f => !was.evidence.functional.some(x => x.id === f.id)).map(f => f.id))
+  const readd = lost.filter(f => !now.evidence.functional.some(x => x.id === f.id))
+  if (!codes.length && !readd.length && !now.evidence.functional.some(f => gained.has(f.id))) return p
+  return applyCuration(p, vid, 'Undone', what, ({ rec, cur }) => {
+    for (const c of codes) { if (a[c]) cur.overrides[c] = a[c]; else delete cur.overrides[c] }
+    rec.evidence.functional = [...rec.evidence.functional.filter(f => !gained.has(f.id)), ...readd]
+  })
+}
 
 // ---------- Snapshots ----------
 

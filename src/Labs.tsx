@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { clinvarLabRows, fetchClinVar } from './engine/clinvar.ts'
-import { saveProject, uuid } from './store.ts'
+import { updateProject, uuid } from './store.ts'
 import { toast } from './ui.tsx'
 import { critLabel, STRENGTH_SHORT, type Applied } from './engine/acmg.ts'
 import { toCsv } from './engine/csv.ts'
@@ -36,7 +36,7 @@ export default function Labs({ project, evaluated }: { project: Project; evaluat
       } catch (err) { failed = err instanceof Error ? err.message : 'lookup failed'; break }
     }
     setBusy('')
-    if (fresh.length) await saveProject({ ...project, labRows: [...project.labRows, ...fresh], imports: [...project.imports, { id: uuid(), kind: 'lab-csv', fileName: `ClinVar submissions (${found} variants)`, rows: fresh.length, issues: 0, at: Date.now() }] })
+    if (fresh.length) await updateProject(project.id, p => ({ ...p, labRows: [...p.labRows, ...fresh], imports: [...p.imports, { id: uuid(), kind: 'lab-csv', fileName: `ClinVar submissions (${found} variants)`, rows: fresh.length, issues: 0, at: Date.now() }] }))
     if (failed) toast(`${failed}${fresh.length ? ` ${fresh.length} submissions were added before that.` : ''}`, { tone: 'error' })
     else toast(`${fresh.length} new ClinVar submissions for ${found} variant${found === 1 ? '' : 's'}${none ? `; ${none} not in ClinVar under that description` : ''}${lookups.length > todo.length ? `. First ${todo.length} variants only` : ''}.`, { tone: fresh.length ? 'ok' : undefined })
   }
