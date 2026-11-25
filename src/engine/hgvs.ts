@@ -26,6 +26,8 @@ export function parseC(raw: string): HgvsC | null {
   if (transcript && !/^(N[MR]_|ENST|X[MR]_|LRG_|SYN)/i.test(transcript) && !gene) { gene = transcript; transcript = undefined }
   const start = cpos(m[3], m[4], m[5], m[6])
   const end = m[8] ? cpos(m[7], m[8], m[9], m[10]) : undefined
+  // There is no c.0, and no offset of 0.
+  if ([start, end].some(p => p && p.pos === 0) || [m[6], m[10]].some(o => o !== undefined && Number(o) === 0)) return null
   const edit = m[11].toUpperCase()
   let e: RegExpExecArray | null
   const out = (o: Omit<HgvsC, 'start' | 'end' | 'transcript' | 'gene'>): HgvsC => ({ ...(transcript ? { transcript } : {}), ...(gene ? { gene } : {}), start, ...(end ? { end } : {}), ...o })

@@ -149,14 +149,19 @@ test("#14 an insertion before the start codon is 5' UTR", async ({ page }) => {
   await expect(row(page, 'c.-1_1insA')).toContainText("5' UTR", { timeout: 5000 })
   await expect(row(page, 'c.1A>G')).toContainText('Start lost')
 })
-test.fail('#15 an intron offset from the middle of an exon is refused', async ({ page }) => {
+test('#15 an intron offset from the middle of an exon is refused', async ({ page }) => {
   // c.30 is inside exon 2, so c.30+5 is not a position. The base there happens to be the stated one.
   await miniHgvs(page, ['MINI,c.30+5C>T,0'])
   await expect(row(page, 'c.30+5C>T').locator('.flag')).toHaveText('check', { timeout: 5000 })
 })
-test.fail('#15 a stated duplicated base that the reference does not have is refused', async ({ page }) => {
+test('#15 a stated duplicated base that the reference does not have is refused', async ({ page }) => {
   await miniHgvs(page, ['MINI,c.11dupT,0'])
   await expect(row(page, 'c.11dup').locator('.flag')).toHaveText('check', { timeout: 5000 })
+})
+test('#15 a reversed range is refused and not scored', async ({ page }) => {
+  await miniHgvs(page, ['MINI,c.90_80del,0'])
+  await expect(row(page, 'c.90_80del').locator('.flag')).toHaveText('check', { timeout: 5000 })
+  await expect(crit(page, 'c.90_80del')).toHaveCount(0)
 })
 test.fail('#16 skipping an exon in a critical region is PVS1_Strong even under 10%', async ({ page }) => {
   // ODD: coding 90 + 6 + 57 = 153 nt = 50 residues + stop. Skipping exon 2 removes residues 31-32, 2 of 50 = 4%.

@@ -3,7 +3,7 @@ import { appliedOf, combine, DEFAULT_GENE, effective, suggest, type ClassName, t
 import { parseC } from './hgvs.ts'
 import { normalize, type VariantRec } from './io.ts'
 import { spliceReport, type SpliceReport } from './splice.ts'
-import { annotate, annotateHgvs, endsInStop, gToHgvsC, hasReference, hgvsCToG, refAt, withStop, type Annotation, type Genome, type GVariant, type Transcript } from './transcript.ts'
+import { annotate, annotateHgvs, endsInStop, gToHgvsC, hasReference, hgvsCToG, orderProblem, positionProblem, refAt, withStop, type Annotation, type Genome, type GVariant, type Transcript } from './transcript.ts'
 
 export interface AuditEntry { at: number; editor: string; action: string; detail: string }
 export interface ClassChange { at: number; editor: string; from: ClassName | null; to: ClassName; points: number; reason: string }
@@ -65,13 +65,15 @@ export function analyse(rec: VariantRec, txs: Transcript[], genome: Genome): Ana
     if (endsInStop(tx, genome) === false) problems.push(`The coding sequence of ${tx.id} does not end in a stop codon in the loaded reference, so protein effects are not predicted. Check the model and the genome build.`)
     if (!g && rec.hgvsC) {
       const h = parseC(`${tx.id}:${rec.hgvsC}`)
-      if (h && hasSeq) {
+      const bad = h && positionProblem(tx, h, hasSeq)
+      if (bad) problems.push(`${bad} Not annotated; check the description and the transcript version.`)
+      else if (h && hasSeq) {
         g = hgvsCToG(tx, genome, h)
         // Same left-aligned form a VCF caller writes, so one variant has one genomic identity.
         if (g) { const n = normalize(genome, g); g = { chrom: n.chrom, pos: n.pos, ref: n.ref, alt: n.alt } }
         if (!g) problems.push(`The reference base(s) do not match ${rec.hgvsC} on ${tx.id}; check the transcript version.`)
       }
-      if (h) ann = annotate(tx, genome, { ...h, gene: tx.gene }, g, rec.hgvsP)
+      if (h && !bad) ann = annotate(tx, genome, { ...h, gene: tx.gene }, g, rec.hgvsP)
     } else if (g) {
       if (hasSeq && refAt(genome, tx.chrom, g.pos, g.ref.length) !== g.ref) problems.push('REF does not match the loaded reference.')
       const h = gToHgvsC(tx, genome, g)
@@ -79,7 +81,9 @@ export function analyse(rec: VariantRec, txs: Transcript[], genome: Genome): Ana
     }
   } else if (rec.hgvsC) {
     const h = parseC(`${rec.transcript ?? rec.gene}:${rec.hgvsC}`)
-    if (h) ann = annotateHgvs({ ...h, ...(rec.gene ? { gene: rec.gene } : {}) }, rec.hgvsP)
+    const bad = h && orderProblem(h)
+    if (bad) problems.push(`${bad} Not annotated.`)
+    else if (h) ann = annotateHgvs({ ...h, ...(rec.gene ? { gene: rec.gene } : {}) }, rec.hgvsP)
     const other = rec.transcript && rec.gene ? txs.find(t => t.gene === rec.gene) : undefined
     if (other && ann) ann.notes = ann.notes.filter(n => !n.startsWith('No transcript model'))
     if (other) problems.push(`${rec.transcript} is not loaded. The loaded model for ${rec.gene} is ${other.id}, and c. numbers belong to one transcript, so this variant is read from its description alone. Import a GTF with ${rec.transcript}, or give genomic coordinates.`)
