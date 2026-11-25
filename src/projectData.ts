@@ -4,14 +4,17 @@ import { toCsv } from './engine/csv.ts'
 import { autoMap, LAB_FIELDS, parseCsv, parseVcf, validateLabCsv, validateVariantCsv, VARIANT_FIELDS, type VariantRec } from './engine/io.ts'
 import { analyse, evaluateAll, newCuration, type Curation, type Evaluated } from './engine/pipeline.ts'
 import { BUNDLED_GENES, BUNDLED_GENOME, BUNDLED_TRANSCRIPTS, LAB_CSV, REAL_VARIANTS_CSV, SAMPLES, sampleVcf } from './engine/sample.ts'
-import { CONSEQUENCE_LABEL } from './engine/transcript.ts'
+import { CONSEQUENCE_LABEL, withStop } from './engine/transcript.ts'
 import { defaultGene, editorName, getProject, getProjects, saveProject, updateProject, useProjects, uuid, type Project, type Snapshot } from './store.ts'
 
-export const context = (p: Project) => ({
-  txs: [...p.transcripts, ...BUNDLED_TRANSCRIPTS.filter(b => !p.transcripts.some(t => t.id === b.id))],
-  genome: { ...BUNDLED_GENOME, ...p.genome },
-  genes: { ...BUNDLED_GENES, ...p.genes },
-})
+export const context = (p: Project) => {
+  const genome = { ...BUNDLED_GENOME, ...p.genome }
+  return {
+    txs: [...p.transcripts.map(t => withStop(t, genome)), ...BUNDLED_TRANSCRIPTS.filter(b => !p.transcripts.some(t => t.id === b.id))],
+    genome,
+    genes: { ...BUNDLED_GENES, ...p.genes },
+  }
+}
 
 export function evaluateProject(p: Project): Evaluated[] {
   const c = context(p)

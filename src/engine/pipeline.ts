@@ -3,7 +3,7 @@ import { appliedOf, combine, DEFAULT_GENE, effective, suggest, type ClassName, t
 import { parseC } from './hgvs.ts'
 import { normalize, type VariantRec } from './io.ts'
 import { spliceReport, type SpliceReport } from './splice.ts'
-import { annotate, annotateHgvs, gToHgvsC, hasReference, hgvsCToG, refAt, type Annotation, type Genome, type GVariant, type Transcript } from './transcript.ts'
+import { annotate, annotateHgvs, endsInStop, gToHgvsC, hasReference, hgvsCToG, refAt, withStop, type Annotation, type Genome, type GVariant, type Transcript } from './transcript.ts'
 
 export interface AuditEntry { at: number; editor: string; action: string; detail: string }
 export interface ClassChange { at: number; editor: string; from: ClassName | null; to: ClassName; points: number; reason: string }
@@ -54,13 +54,15 @@ export function resolveTranscript(rec: VariantRec, txs: Transcript[]): Transcrip
 
 export function analyse(rec: VariantRec, txs: Transcript[], genome: Genome): Analysed {
   const problems: string[] = []
-  const tx = resolveTranscript(rec, txs)
+  const found = resolveTranscript(rec, txs)
+  const tx = found && withStop(found, genome)
   let g = rec.g ?? null
   // Work in the contig name the reference uses (chr prefix or not).
   if (g && tx) g = { ...g, chrom: tx.chrom }
   let ann: Annotation | null = null
   if (tx) {
     const hasSeq = hasReference(genome, tx)
+    if (endsInStop(tx, genome) === false) problems.push(`The coding sequence of ${tx.id} does not end in a stop codon in the loaded reference, so protein effects are not predicted. Check the model and the genome build.`)
     if (!g && rec.hgvsC) {
       const h = parseC(`${tx.id}:${rec.hgvsC}`)
       if (h && hasSeq) {

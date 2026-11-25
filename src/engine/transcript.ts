@@ -133,6 +133,26 @@ export function mrna(t: Transcript, g: Genome): string | null {
   return s
 }
 
+/**
+ * GTF CDS rows leave the stop codon out, and a file can come without stop_codon rows. When the sequence is loaded and the next
+ * codon of the mRNA is a stop, the model is extended to include it; otherwise it is returned as it is.
+ */
+export function withStop(t: Transcript, g: Genome): Transcript {
+  const m = mrna(t, g)
+  if (!m) return t
+  const { start, end, length } = cdsBounds(t)
+  if (length % 3 !== 0 || translate(m.slice(start - 1, end)).endsWith('*') || translate(m.slice(end, end + 3)) !== '*') return t
+  return t.strand === 1 ? { ...t, cdsEnd: txToG(t, end + 3) } : { ...t, cdsStart: txToG(t, end + 3) }
+}
+
+/** Whether the coding sequence ends in a stop codon. Null when the sequence is not loaded. */
+export function endsInStop(t: Transcript, g: Genome): boolean | null {
+  const m = mrna(t, g)
+  if (!m) return null
+  const { end, length } = cdsBounds(t)
+  return length % 3 === 0 && translate(m.slice(end - 3, end)) === '*'
+}
+
 /** Shifts a trimmed indel as far as possible in one genomic direction (+1 right, -1 left). */
 export function shiftIndel(g: Genome, chrom: string, start: number, ref: string, alt: string, dir: 1 | -1): { start: number; ref: string; alt: string } {
   if (ref && alt) return { start, ref, alt }
@@ -225,6 +245,8 @@ export function proteinEffect(t: Transcript, g: Genome, v: GVariant): ProteinEff
   if (y < cds.start || x > cds.end) return null
   if (x < cds.start + 3 && y >= cds.start) return { hgvsP: 'p.(Met1?)' }
   const refP = translate(m.slice(cds.start - 1, cds.end), false)
+  // Without its stop the reference protein cannot be compared with an edited one, which runs to a stop.
+  if (!refP.endsWith('*') || cds.length % 3 !== 0) return null
   const altP = translate(edited.slice(cds.start - 1), true)
   let i = 0
   while (i < refP.length && i < altP.length && refP[i] === altP[i]) i++
