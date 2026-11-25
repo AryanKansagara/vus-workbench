@@ -65,7 +65,7 @@ samtools faidx GRCh38.fa chr13:32310000-32410000 > brca2.region.fa`} />
           <li><b>PP3 / BP4</b>: REVEL calibration of Pejaver et al., Am J Hum Genet 2022, Table 2, for missense. PP3: ≥ 0.644 Supporting, ≥ 0.773 Moderate, ≥ 0.932 Strong. BP4: ≤ 0.290 Supporting, ≤ 0.183 Moderate, ≤ 0.016 Strong, ≤ 0.003 Very strong. Between 0.290 and 0.644 neither applies. SpliceAI ≥ 0.2 for PP3 and ≤ 0.1 for BP4 (ClinGen SVI splicing, Walker et al. 2023). PP3 is never combined with PVS1, and PP3 with PM1 counts for at most 4 points together (same paper).</li>
           <li><b>Local splice model</b>: position weight matrices for the 9-nt donor and 16-nt acceptor from published consensus frequencies, scored in bits. A drop of 20% weakens and 60% abolishes; it supports PP3 only when no SpliceAI score is entered.</li>
           <li><b>PS3 / BS3</b>: OddsPath thresholds of Brnich et al. 2019 (over 18.7 Strong, 4.3 Moderate, 2.1 Supporting; under 0.053, 0.23, 0.48 for benign). Without OddsPath, Supporting.</li>
-          <li><b>PM3 / BP2</b>: phase from phased genotypes. Recessive gene: in trans with P/LP is PM3 Moderate, phase unknown is PM3 Supporting. In cis with P/LP, or in trans in a dominant gene, is BP2.</li>
+          <li><b>PM3 / BP2</b>: phase from phased genotypes. Recessive gene (ClinGen SVI PM3 v1.0): in trans with P/LP is PM3 Moderate; phase unknown is PM3 Supporting with P and nothing with LP. The best partner counts, and the row order does not matter. In cis with P/LP, or in trans in a dominant gene, is BP2 (Richards et al. 2015); in trans in an X-linked gene is not.</li>
         </ul>
 
         <h2 id="sources">Data sources and test files</h2>
