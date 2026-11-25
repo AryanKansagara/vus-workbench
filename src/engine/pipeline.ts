@@ -29,10 +29,17 @@ export interface Analysed {
 
 const stripVer = (s: string) => s.replace(/\.\d+$/, '')
 
+const isAccession = (s: string) => /^([NX][MR]_|ENST|LRG_|SYN_)/i.test(s)
+
+/** By transcript accession in any version. A MANE Select model is named by its RefSeq accession and carries the identical Ensembl one in its source. */
+const byAccession = (id: string, txs: Transcript[]) => txs.find(t => stripVer(t.id) === stripVer(id)) ?? txs.find(t => t.source.split(/\s+/).some(w => /^ENST/.test(w) && stripVer(w) === stripVer(id)))
+
 export function resolveTranscript(rec: VariantRec, txs: Transcript[]): Transcript | null {
   if (rec.transcript) {
-    const t = txs.find(t => stripVer(t.id) === stripVer(rec.transcript!))
+    const t = byAccession(rec.transcript, txs)
     if (t) return t
+    // c. numbers belong to their transcript: without genomic coordinates another model of the gene cannot stand in for it.
+    if (!rec.g && isAccession(rec.transcript)) return null
   }
   if (rec.gene) {
     const t = txs.find(t => t.gene === rec.gene)
@@ -71,6 +78,9 @@ export function analyse(rec: VariantRec, txs: Transcript[], genome: Genome): Ana
   } else if (rec.hgvsC) {
     const h = parseC(`${rec.transcript ?? rec.gene}:${rec.hgvsC}`)
     if (h) ann = annotateHgvs({ ...h, ...(rec.gene ? { gene: rec.gene } : {}) }, rec.hgvsP)
+    const other = rec.transcript && rec.gene ? txs.find(t => t.gene === rec.gene) : undefined
+    if (other && ann) ann.notes = ann.notes.filter(n => !n.startsWith('No transcript model'))
+    if (other) problems.push(`${rec.transcript} is not loaded. The loaded model for ${rec.gene} is ${other.id}, and c. numbers belong to one transcript, so this variant is read from its description alone. Import a GTF with ${rec.transcript}, or give genomic coordinates.`)
   }
   if (!ann && !problems.length) problems.push(rec.g ? 'No transcript model covers this position. Load the gene on the Genes tab (Ensembl, GRCh38) or import a GTF subset.' : 'Could not annotate this variant.')
   const splice = tx && g && ann && hasReference(genome, tx) ? spliceReport(tx, genome, g) : null

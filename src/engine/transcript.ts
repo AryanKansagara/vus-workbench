@@ -241,15 +241,20 @@ export function proteinEffect(t: Transcript, g: Genome, v: GVariant): ProteinEff
     return { hgvsP: `p.(${at(i)}${aa3(altP[i])}fs${ter >= 0 ? `Ter${ter - i + 1}` : ''})`, ptcAa: ter >= 0 ? ter + 1 : undefined }
   }
   // In-frame: trim the common prefix (done) then suffix on the protein level.
-  const rTail = refP.slice(i), aTail = altP.slice(0, altP.indexOf('*') + 1 || undefined).slice(i)
+  // A stop that the edit brings in comes before the end of the edited frame: compare with the whole edited frame, so the
+  // reference stop is not mistaken for it, and report the change up to the new stop.
+  const newStop = altP.endsWith('*') && altP.length < refP.length + dl / 3
+  const rTail = refP.slice(i), aTail = (newStop ? translate(edited.slice(cds.start - 1, cds.end + dl)) : altP.slice(0, altP.indexOf('*') + 1 || undefined)).slice(i)
   let k = 0
   while (k < rTail.length && k < aTail.length && rTail[rTail.length - 1 - k] === aTail[aTail.length - 1 - k]) k++
-  const delSeg = rTail.slice(0, rTail.length - k), insSeg = aTail.slice(0, aTail.length - k)
+  const delSeg = rTail.slice(0, rTail.length - k), insAll = aTail.slice(0, aTail.length - k)
+  const insSeg = newStop ? insAll.slice(0, insAll.indexOf('*') + 1) : insAll
+  const ptc = insSeg.includes('*') ? { ptcAa: i + insSeg.indexOf('*') + 1 } : {}
   const rng = (n: number) => n === 1 ? at(i) : `${at(i)}_${at(i + n - 1)}`
   if (delSeg.length === 1 && insSeg.length === 1) return { hgvsP: `p.(${at(i)}${aa3(insSeg)})` }
   if (!insSeg) return { hgvsP: `p.(${rng(delSeg.length)}del)` }
-  if (!delSeg) return { hgvsP: `p.(${at(i - 1)}_${at(i)}ins${aa3(insSeg)})` }
-  return { hgvsP: `p.(${rng(delSeg.length)}delins${aa3(insSeg)})`, ...(insSeg.includes('*') ? { ptcAa: i + insSeg.indexOf('*') + 1 } : {}) }
+  if (!delSeg) return { hgvsP: `p.(${at(i - 1)}_${at(i)}ins${aa3(insSeg)})`, ...ptc }
+  return { hgvsP: `p.(${rng(delSeg.length)}delins${aa3(insSeg)})`, ...ptc }
 }
 
 // ---------- Consequence ----------
@@ -295,6 +300,27 @@ export interface Annotation {
 
 const isCanonical = (off: number) => off === 1 || off === 2 || off === -1 || off === -2
 
+/**
+ * Canonical splice bases (+1, +2, -1, -2) that a deleted range covers, told from the c. positions alone: the ends of a
+ * deletion such as c.300_306+5del or c.157-20_306+18del are not canonical positions themselves.
+ */
+function deletedSites(h: HgvsC): { donor: boolean; acceptor: boolean } {
+  const none = { donor: false, acceptor: false }
+  if ((h.kind !== 'del' && h.kind !== 'delins') || !h.end) return none
+  const s = h.start, e = h.end
+  const so = s.offset, eo = e.offset
+  const sameAnchor = s.pos === e.pos && !!s.star === !!e.star
+  // Both ends exonic: any intron between them is removed whole, which leaves no splice site to lose.
+  if (!so && !eo) return none
+  // Inside one intron, measured from the same exon: only the ends can reach +-1/2.
+  if (sameAnchor && so * eo > 0) return { donor: so > 0 && (so <= 2 || eo <= 2), acceptor: so < 0 && (so >= -2 || eo >= -2) }
+  if (so > 0 && eo < 0) {
+    const adjacent = e.star && !s.star ? e.pos === 1 : e.pos - s.pos === 1 || (s.pos === -1 && e.pos === 1)
+    return adjacent ? { donor: so <= 2, acceptor: eo >= -2 } : { donor: true, acceptor: true }
+  }
+  return { donor: eo !== 0 && (so <= 0 || eo > 0), acceptor: so !== 0 }
+}
+
 /** Consequence from HGVS notation alone (no transcript model): position class, length change and the p. description. */
 export function annotateHgvs(h: HgvsC, hgvsP?: string): Annotation {
   const notes: string[] = []
@@ -306,8 +332,10 @@ export function annotateHgvs(h: HgvsC, hgvsP?: string): Annotation {
   let consequence: Consequence
   let spliceRegion = false
   const canonical = pos.some(q => isCanonical(q.offset))
+  const lost = deletedSites(h)
   const inRegion = pos.some(q => Math.abs(q.offset) >= 3 && Math.abs(q.offset) <= 8)
   if (canonical) consequence = pos.find(q => isCanonical(q.offset))!.offset > 0 ? 'splice_donor' : 'splice_acceptor'
+  else if (lost.donor || lost.acceptor) consequence = lost.acceptor ? 'splice_acceptor' : 'splice_donor'
   else if (allIntronic) consequence = inRegion ? 'splice_region' : 'intronic'
   else if (pos.every(q => !q.star && q.pos < 0)) consequence = 'utr5'
   else if (pos.every(q => q.star)) consequence = 'utr3'
@@ -315,13 +343,15 @@ export function annotateHgvs(h: HgvsC, hgvsP?: string): Annotation {
     consequence = pKindToConsequence(p.kind)
     if (consequence === 'frameshift' && dl !== null && dl % 3 === 0) notes.push('p. says frameshift but the c. length change is a multiple of 3.')
   } else if (dl !== null && dl % 3 !== 0) consequence = 'frameshift'
+  else if (dl === null && h.end?.star && !h.start.star && (h.kind === 'del' || h.kind === 'delins')) consequence = 'stop_lost'
+  else if (dl === null) { consequence = 'coding_sequence'; notes.push('The length of the change cannot be told from the c. description.') }
   else if (h.kind === 'sub') { consequence = 'coding_sequence'; notes.push('Add the p. description or a transcript model with sequence to resolve missense / synonymous / nonsense.') }
   else consequence = h.kind === 'del' ? 'inframe_deletion' : h.kind === 'delins' ? 'inframe_delins' : 'inframe_insertion'
   if (inRegion && consequence !== 'splice_region') spliceRegion = true
   const a: Annotation = { hgvsC: formatC(h), consequence, spliceRegion, model: 'hgvs-only', notes, nmd: null, removedFraction: null, skipInFrame: null }
   if (hgvsP) a.hgvsP = hgvsP.replace(/^.*:/, '')
   if (off) a.intronOffset = off
-  if (p?.kind === 'nonsense' && p.pos) a.ptcAa = p.pos
+  if (p?.kind === 'nonsense' && p.pos) a.ptcAa = p.stopAt ?? p.pos
   if (p?.kind === 'frameshift' && p.pos && p.fsTer) a.ptcAa = p.pos + p.fsTer - 1
   notes.push('No transcript model loaded for this gene: exon structure, NMD and splice-strength are not computed. Load the gene on the Genes tab (Ensembl, GRCh38) or import a GTF subset to enable them.')
   return a
@@ -340,6 +370,22 @@ function pKindToConsequence(k: PKind): Consequence {
     case 'inframe_delins': return 'inframe_delins'
     default: return 'coding_sequence'
   }
+}
+
+/** Exons (transcript order) that a deletion crossing an exon boundary removes whole or leaves without a canonical splice site. */
+function deletedExons(t: Transcript, h: HgvsC): number[] {
+  if ((h.kind !== 'del' && h.kind !== 'delins') || !h.end || (!h.start.offset && !h.end.offset)) return []
+  const x = cToG(t, h.start), y = cToG(t, h.end)
+  const lo = Math.min(x, y), hi = Math.max(x, y)
+  const a = gToC(t, x), b = gToC(t, y)
+  if (a.intron !== undefined && a.intron === b.intron) return []
+  const ex = txExons(t)
+  const touches = (from: number, to: number) => lo <= to && hi >= from
+  return ex.map((e, i) => {
+    const before = touches(e[0] - 2, e[0] - 1), after = touches(e[1] + 1, e[1] + 2)
+    const acceptor = i > 0 && (t.strand === 1 ? before : after), donor = i < ex.length - 1 && (t.strand === 1 ? after : before)
+    return acceptor || donor || (lo <= e[0] && hi >= e[1]) ? i : -1
+  }).filter(i => i >= 0)
 }
 
 /** Full annotation against a transcript model. `v` is optional for c.-only input; with it, protein effect is computed from sequence. */
@@ -375,18 +421,24 @@ export function annotate(t: Transcript, g: Genome, h: HgvsC, v?: GVariant | null
     a.nmd = null
     a.notes.push('Premature stop position unknown; give p. with fsTer or load the reference sequence.')
   }
-  // Canonical splice: model as skipping of the adjacent exon.
-  if ((a.consequence === 'splice_donor' || a.consequence === 'splice_acceptor') && loc.intron !== undefined) {
-    const idx = a.consequence === 'splice_donor' ? loc.intron : loc.intron + 1
-    const e = ex[idx]
-    const ea = gToTx(t, t.strand === 1 ? e[0] : e[1])!, eb = ea + exLen(e) - 1
-    const coding = Math.max(0, Math.min(eb, cds.end) - Math.max(ea, cds.start) + 1)
+  // Canonical splice: model as skipping of the adjacent exon, or of every exon a boundary-spanning deletion removes or leaves without a site.
+  const isSplice = a.consequence === 'splice_donor' || a.consequence === 'splice_acceptor'
+  const hit = isSplice ? deletedExons(t, h) : []
+  if (isSplice && !hit.length && loc.intron !== undefined) hit.push(a.consequence === 'splice_donor' ? loc.intron : loc.intron + 1)
+  if (hit.length) {
+    const first = ex[hit[0]]
+    const coding = hit.reduce((sum, i) => {
+      const ea = gToTx(t, t.strand === 1 ? ex[i][0] : ex[i][1])!, eb = ea + exLen(ex[i]) - 1
+      return sum + Math.max(0, Math.min(eb, cds.end) - Math.max(ea, cds.start) + 1)
+    }, 0)
+    const ea = gToTx(t, t.strand === 1 ? first[0] : first[1])!
     a.skipInFrame = coding % 3 === 0
     // Out-of-frame skipping of one of the last two exons puts the new stop in the NMD-escape zone.
-    a.lastExonRegion = idx >= ex.length - 2
+    a.lastExonRegion = hit[hit.length - 1] >= ex.length - 2
     a.nmd = a.skipInFrame ? false : !a.lastExonRegion
     a.removedFraction = a.skipInFrame ? coding / 3 / cds.aaLength : Math.max(0, (cds.end - Math.max(ea, cds.start) + 1) / 3 / cds.aaLength)
-    a.notes.push(`Predicted to skip exon ${idx + 1} (${exLen(e)} nt, ${a.skipInFrame ? 'in frame' : 'out of frame'}).`)
+    const frame = a.skipInFrame ? 'in frame' : 'out of frame'
+    a.notes.push(hit.length === 1 ? `Predicted to skip exon ${hit[0] + 1} (${exLen(first)} nt, ${frame}).` : `Predicted to lose exons ${hit.map(i => i + 1).join(', ')} (${frame}).`)
   }
   if (effect && a.hgvsP && a.consequence === 'coding_sequence') a.consequence = 'missense'
   return a
