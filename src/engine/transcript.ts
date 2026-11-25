@@ -339,6 +339,8 @@ export interface Annotation {
   consequence: Consequence
   /** Also within the splice region (exonic 1-3 bp or intronic 3-8 bp from a junction) though the primary consequence is different. */
   spliceRegion: boolean
+  /** Every position is intronic at or beyond +7 or -21, outside the splice region of the ClinGen SVI splicing recommendations (Walker et al. 2023). */
+  bp7Intronic?: boolean
   /** Distance into the intron (signed c. offset), when intronic. */
   intronOffset?: number
   exon?: number
@@ -414,6 +416,7 @@ export function annotateHgvs(h: HgvsC, hgvsP?: string): Annotation {
   const a: Annotation = { hgvsC: formatC(h), consequence, spliceRegion, model: 'hgvs-only', notes, nmd: null, removedFraction: null, skipInFrame: null }
   if (hgvsP) a.hgvsP = hgvsP.replace(/^.*:/, '')
   if (off) a.intronOffset = off
+  if ((consequence === 'intronic' || consequence === 'splice_region') && pos.every(q => q.offset >= 7 || q.offset <= -21)) a.bp7Intronic = true
   if (p?.kind === 'nonsense' && p.pos) a.ptcAa = p.stopAt ?? p.pos
   if (p?.kind === 'frameshift' && p.pos && p.fsTer) a.ptcAa = p.pos + p.fsTer - 1
   notes.push('No transcript model loaded for this gene: exon structure, NMD and splice-strength are not computed. Load the gene on the Genes tab (Ensembl, GRCh38) or import a GTF subset to enable them.')
