@@ -149,7 +149,7 @@ export default function VariantView({ project, evaluated, vid }: { project: Proj
                   return (
                     <div key={d.code} className={`crit-row${c?.met ? ' met' : ''}${over ? ' over' : sug ? ' sug' : ''}`}>
                       <label className="crit-toggle" title={d.label}>
-                        <input type="checkbox" checked={!!c?.met} onChange={x => setCrit(c, d.code, { met: x.target.checked, ...(x.target.checked && !c ? { strength: d.strength } : {}) }, x.target.checked ? 'Criterion applied' : 'Criterion removed', `${d.code}${x.target.checked ? '' : ` (${sug ? 'overrides engine' : 'manual'})`}`)} />
+                        <input type="checkbox" checked={!!c?.met} onChange={x => setCrit(c, d.code, { met: x.target.checked, ...(x.target.checked && !c ? { strength: d.strength } : x.target.checked && c?.source === 'engine' ? { evidence: '' } : {}) }, x.target.checked ? 'Criterion applied' : 'Criterion removed', `${d.code}${x.target.checked ? '' : ` (${sug ? 'overrides engine' : 'manual'})`}`)} />
                         <b>{d.code}</b>
                       </label>
                       {d.code !== 'BA1' ? (

@@ -85,7 +85,7 @@ test('#8 an unphased likely pathogenic partner is 0.25 points, below Supporting'
   await tab(page, 'Worklist')
   await expect(crit(page, 'c.31C>T')).toHaveText(['PM2'], { timeout: 5000 })
 })
-test.fail('#9 an OddsPath in the indeterminate range gives no PS3', async ({ page }) => {
+test('#9 an OddsPath in the indeterminate range gives no PS3', async ({ page }) => {
   await miniHgvs(page, ['MINI,c.31C>T,'])
   await openVariant(page, 'c.31C>T')
   await page.getByRole('button', { name: 'Add functional result' }).click()
@@ -94,6 +94,16 @@ test.fail('#9 an OddsPath in the indeterminate range gives no PS3', async ({ pag
   await page.getByRole('button', { name: 'Add', exact: true }).click()
   await expect(page.locator('.func-list')).toContainText('OddsPath 1')
   await expect(page.locator('.sticky')).toContainText('0 pts', { timeout: 5000 })
+})
+test('#9 an OddsPath against the stated result gives no point and a message', async ({ page }) => {
+  await miniHgvs(page, ['MINI,c.31C>T,'])
+  await openVariant(page, 'c.31C>T')
+  await page.getByRole('button', { name: 'Add functional result' }).click()
+  await page.getByLabel('Assay').fill('Minigene')
+  await page.getByLabel('OddsPath').fill('0.04')
+  await page.getByRole('button', { name: 'Add', exact: true }).click()
+  await expect(page.locator('.crit-row').filter({ hasText: 'PS3' })).toContainText('OddsPath 0.04 points to BS3, against the stated damaging result', { timeout: 5000 })
+  await expect(page.locator('.sticky')).toContainText('0 pts')
 })
 test.fail('#10 a percent sign in a GFF3 note does not take the page down', async ({ page }) => {
   await newWorklist(page)
