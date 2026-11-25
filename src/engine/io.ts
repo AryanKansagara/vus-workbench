@@ -185,7 +185,7 @@ export function parseVcf(text: string, file: string, genome: Genome, idGen: () =
       continue
     }
     if (line.startsWith('#')) {
-      header = line.slice(1).split('\t')
+      header = line.slice(1).replace(/\t+$/, '').split('\t')
       if (header.length < 8 || header[0] !== 'CHROM') issues.push({ line: ln, level: 'error', message: 'Header line must be tab-separated: #CHROM POS ID REF ALT QUAL FILTER INFO' })
       samples = header.slice(9)
       continue
@@ -193,6 +193,7 @@ export function parseVcf(text: string, file: string, genome: Genome, idGen: () =
     if (!header) { issues.push({ line: ln, level: 'error', message: 'Data before the #CHROM header line' }); header = ['CHROM'] }
     const f = line.split('\t')
     if (f.length < 8) { issues.push({ line: ln, level: 'error', message: `Expected at least 8 tab-separated columns, found ${f.length}` }); continue }
+    if (f.length < header.length || (header.length > 9 && f.slice(8, header.length).some(x => !x))) { issues.push({ line: ln, level: 'error', message: `The header has ${header.length} columns; this row has ${f.filter((x, k) => k < 8 || x).length}. The row is cut off and was skipped` }); continue }
     records++
     if (out.length >= maxRecords) { if (out.length === maxRecords) issues.push({ line: ln, level: 'warning', message: `Stopped at ${maxRecords.toLocaleString()} variants; filter the VCF to your gene panel first (see Docs)` }); continue }
     const [chrom, posS, id, refRaw, altRaw, , filter, info] = f
@@ -551,10 +552,12 @@ export function parseGtf(text: string, source: string): { transcripts: Transcrip
 export function parseFasta(text: string): { genome: Genome; issues: Issue[] } {
   const genome: Genome = {}
   const issues: Issue[] = []
-  let cur: { chrom: string; start: number; parts: string[]; line: number } | null = null
+  let cur: { chrom: string; start: number; end?: number; parts: string[]; line: number } | null = null
   const flush = () => {
     if (!cur) return
     const seq = cur.parts.join('').toUpperCase()
+    if (!seq) { issues.push({ line: cur.line, level: 'error', message: `${cur.chrom}: no sequence under this header; not loaded` }); return }
+    if (cur.end !== undefined && seq.length !== cur.end - cur.start + 1) { issues.push({ line: cur.line, level: 'error', message: `${cur.chrom}:${cur.start}-${cur.end} should have ${Math.max(0, cur.end - cur.start + 1)} bases and has ${seq.length}; not loaded. Is the file cut off?` }); return }
     if (/[^ACGTN]/.test(seq)) issues.push({ line: cur.line, level: 'warning', message: `${cur.chrom}: IUPAC codes other than N were read as N` })
     // Keyed by region so two genes on one chromosome can both be loaded.
     genome[cur.start === 1 ? cur.chrom : `${cur.chrom}:${cur.start}-${cur.start + seq.length - 1}`] = { chrom: cur.chrom, start: cur.start, seq: seq.replace(/[^ACGTN]/g, 'N') }
@@ -564,14 +567,14 @@ export function parseFasta(text: string): { genome: Genome; issues: Issue[] } {
       flush()
       const h = l.slice(1).trim().split(/\s+/)[0]
       const m = /^(.+):(\d+)-(\d+)$/.exec(h.replace(/,/g, ''))
-      cur = m ? { chrom: m[1], start: Number(m[2]), parts: [], line: i + 1 } : { chrom: h, start: 1, parts: [], line: i + 1 }
+      cur = m ? { chrom: m[1], start: Number(m[2]), end: Number(m[3]), parts: [], line: i + 1 } : { chrom: h, start: 1, parts: [], line: i + 1 }
     } else if (l.trim()) {
       if (!cur) issues.push({ line: i + 1, level: 'error', message: 'Sequence before the first > header' })
       else cur.parts.push(l.trim())
     }
   })
   flush()
-  if (!Object.keys(genome).length) issues.push({ line: 1, level: 'error', message: 'No FASTA records found' })
+  if (!cur) issues.push({ line: 1, level: 'error', message: 'No FASTA records found' })
   return { genome, issues }
 }
 

@@ -117,15 +117,21 @@ test('#11 an unclosed quote does not pass another row off as criteria', async ({
   await choose(page, 'labs.csv', 'variant,lab,classification,criteria\nBRCA2:c.1A>G,A,VUS,"PM2\nBRCA2:c.1A>G,B,Pathogenic,PVS1\n')
   await expect(issues(page, 'labs.csv').locator('li.error')).toHaveCount(1, { timeout: 5000 })
 })
-test.fail('#12 a FASTA shorter than its header says is reported', async ({ page }) => {
+test('#12 a FASTA shorter than its header says is reported', async ({ page }) => {
   await newWorklist(page)
   await choose(page, 'mini.fa', MINI_FASTA.trim().slice(0, -30))
   await expect(issues(page, 'mini.fa')).toBeVisible({ timeout: 5000 })
 })
-test.fail('#12 a VCF row with fewer columns than the header is reported', async ({ page }) => {
+test('#12 a VCF row with fewer columns than the header is reported', async ({ page }) => {
   await withMini(page)
   await choose(page, 'cut.vcf', vcf([]) + 'chr9\t1086\t.\tC\tT\t60\tPASS\tAF_popmax=0')
   await expect(issues(page, 'cut.vcf').locator('li.error')).toHaveCount(1, { timeout: 5000 })
+})
+test('#12 an empty FASTA record is reported', async ({ page }) => {
+  await newWorklist(page)
+  await choose(page, 'mini.fa', '>chr9\n')
+  await expect(issues(page, 'mini.fa').locator('li.error')).toHaveCount(1, { timeout: 5000 })
+  await expect(importBtn(page, 'mini.fa')).toBeDisabled()
 })
 test('#13 a GTF without stop_codon rows does not turn an in-frame deletion into a stop', async ({ page }) => {
   await newWorklist(page)
