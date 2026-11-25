@@ -43,12 +43,12 @@ test.fail('#4 scores outside 0 to 1 in a VCF are refused', async ({ page }) => {
   await importFile(page, 'a.vcf', vcf([v(1086, 'C', 'T', 'AF_popmax=-1;REVEL=7')]))
   await expect(crit(page, 'c.31C>T')).toHaveCount(0, { timeout: 5000 })
 })
-test.fail('#5 BP6 counts towards benign', async ({ page }) => {
+test('#5 BP6 counts towards benign', async ({ page }) => {
   await newWorklist(page)
   await importFile(page, 'labs.csv', 'variant,lab,classification,criteria\nBRCA2:c.1A>G,Lab A,Likely benign,"BP4, BP6"\n')
   await expect(page.locator('tr.sum td').nth(1)).toHaveText('-2', { timeout: 5000 })
 })
-test.fail('#5 a strength in brackets is kept, and a criterion marked not met is not counted', async ({ page }) => {
+test('#5 a strength in brackets is kept, and a criterion marked not met is not counted', async ({ page }) => {
   await newWorklist(page)
   await importFile(page, 'labs.csv', 'variant,lab,classification,criteria\nBRCA2:c.1A>G,Lab A,VUS,"PS3 (Moderate), PM2 not met"\n')
   await expect(page.locator('tr.sum td').nth(1)).toHaveText('2', { timeout: 5000 })
