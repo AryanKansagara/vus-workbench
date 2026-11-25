@@ -66,10 +66,16 @@ export function parseNum(raw: string): number {
   return /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(s) ? Number(s) : NaN
 }
 
+/** Text a spreadsheet would run as a formula (OWASP CSV injection) is exported with a leading apostrophe. Plain numbers are not. */
+const inert = (s: string) => /^[=+\-@\t\r]/.test(s) && Number.isNaN(parseNum(s)) ? `'${s}` : s
+
+/** Takes the apostrophe off again, so an exported table reads back as it was. */
+export const uninert = (s: string) => s[0] === "'" && inert(s.slice(1)) === s ? s.slice(1) : s
+
 export function toCsv(rows: (string | number)[][]): string {
   return rows.map(r => r.map(v => {
-    const s = typeof v === 'number' ? String(Math.round(v * 1e6) / 1e6) : v
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    const s = typeof v === 'number' ? String(Math.round(v * 1e6) / 1e6) : inert(v)
+    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
   }).join(',')).join('\n') + '\n'
 }
 

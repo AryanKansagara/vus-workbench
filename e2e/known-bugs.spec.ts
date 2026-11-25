@@ -1,4 +1,4 @@
-// Filed bugs, pinned with test.fail: each asserts the correct behaviour and starts passing when its issue is fixed.
+// Filed bugs: each test asserts the correct behaviour. A bug that is not fixed yet is pinned with test.fail.
 import { choose, expect, importBtn, importFile, issues, MINI_FASTA, MINI_GFF3, MINI_GTF, miniHgvs, newWorklist, openVariant, row, saveAs, tab, test, v, vcf, withMini, cells } from './fixtures'
 
 const crit = (page: Parameters<typeof row>[0], c: string) => row(page, c).locator('.crit')
@@ -192,7 +192,7 @@ test('#20 the same variant in two samples is compared twice', async ({ page }) =
   await page.locator('.arrow-sep + label select').selectOption('current')
   await expect(page.getByText('2 unchanged')).toBeVisible({ timeout: 5000 })
 })
-test.fail('#21 a lab name cannot become a spreadsheet formula', async ({ page }) => {
+test('#21 a lab name cannot become a spreadsheet formula', async ({ page }) => {
   await newWorklist(page)
   await importFile(page, 'labs.csv', 'variant,lab,classification\nBRCA2:c.1A>G,"=HYPERLINK(""http://x.test"")",VUS\n')
   const [, csv] = await saveAs(page, page.getByRole('button', { name: 'Reconciliation CSV' }))
