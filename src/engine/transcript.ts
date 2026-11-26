@@ -241,15 +241,20 @@ export function proteinEffect(t: Transcript, g: Genome, v: GVariant): ProteinEff
     return { hgvsP: `p.(${at(i)}${aa3(altP[i])}fs${ter >= 0 ? `Ter${ter - i + 1}` : ''})`, ptcAa: ter >= 0 ? ter + 1 : undefined }
   }
   // In-frame: trim the common prefix (done) then suffix on the protein level.
-  const rTail = refP.slice(i), aTail = altP.slice(0, altP.indexOf('*') + 1 || undefined).slice(i)
+  // A stop that the edit brings in comes before the end of the edited frame: compare with the whole edited frame, so the
+  // reference stop is not mistaken for it, and report the change up to the new stop.
+  const newStop = altP.endsWith('*') && altP.length < refP.length + dl / 3
+  const rTail = refP.slice(i), aTail = (newStop ? translate(edited.slice(cds.start - 1, cds.end + dl)) : altP.slice(0, altP.indexOf('*') + 1 || undefined)).slice(i)
   let k = 0
   while (k < rTail.length && k < aTail.length && rTail[rTail.length - 1 - k] === aTail[aTail.length - 1 - k]) k++
-  const delSeg = rTail.slice(0, rTail.length - k), insSeg = aTail.slice(0, aTail.length - k)
+  const delSeg = rTail.slice(0, rTail.length - k), insAll = aTail.slice(0, aTail.length - k)
+  const insSeg = newStop ? insAll.slice(0, insAll.indexOf('*') + 1) : insAll
+  const ptc = insSeg.includes('*') ? { ptcAa: i + insSeg.indexOf('*') + 1 } : {}
   const rng = (n: number) => n === 1 ? at(i) : `${at(i)}_${at(i + n - 1)}`
   if (delSeg.length === 1 && insSeg.length === 1) return { hgvsP: `p.(${at(i)}${aa3(insSeg)})` }
   if (!insSeg) return { hgvsP: `p.(${rng(delSeg.length)}del)` }
-  if (!delSeg) return { hgvsP: `p.(${at(i - 1)}_${at(i)}ins${aa3(insSeg)})` }
-  return { hgvsP: `p.(${rng(delSeg.length)}delins${aa3(insSeg)})`, ...(insSeg.includes('*') ? { ptcAa: i + insSeg.indexOf('*') + 1 } : {}) }
+  if (!delSeg) return { hgvsP: `p.(${at(i - 1)}_${at(i)}ins${aa3(insSeg)})`, ...ptc }
+  return { hgvsP: `p.(${rng(delSeg.length)}delins${aa3(insSeg)})`, ...ptc }
 }
 
 // ---------- Consequence ----------
@@ -321,7 +326,7 @@ export function annotateHgvs(h: HgvsC, hgvsP?: string): Annotation {
   const a: Annotation = { hgvsC: formatC(h), consequence, spliceRegion, model: 'hgvs-only', notes, nmd: null, removedFraction: null, skipInFrame: null }
   if (hgvsP) a.hgvsP = hgvsP.replace(/^.*:/, '')
   if (off) a.intronOffset = off
-  if (p?.kind === 'nonsense' && p.pos) a.ptcAa = p.pos
+  if (p?.kind === 'nonsense' && p.pos) a.ptcAa = p.stopAt ?? p.pos
   if (p?.kind === 'frameshift' && p.pos && p.fsTer) a.ptcAa = p.pos + p.fsTer - 1
   notes.push('No transcript model loaded for this gene: exon structure, NMD and splice-strength are not computed. Load the gene on the Genes tab (Ensembl, GRCh38) or import a GTF subset to enable them.')
   return a

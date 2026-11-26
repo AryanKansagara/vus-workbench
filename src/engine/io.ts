@@ -127,7 +127,7 @@ export function pickAnnotation(raw: string, fields: string[], alt: string, allel
   if (/c\./.test(c) && parseC(c.replace(/^.*?(c\.)/, '$1'))) out.hgvsC = c.replace(/^.*?(c\.)/, '$1')
   const pp = /p\./.test(p) ? parseP(p.replace(/^.*?(p\.)/, '$1')) : null
   // Substitutions are rewritten in three-letter form ("p.Lys3326*" becomes "p.Lys3326Ter"); other types keep the tool's wording.
-  if (pp) out.hgvsP = ['missense', 'nonsense', 'synonymous'].includes(pp.kind) && pp.pos ? formatP(pp) : p.replace(/^.*?(p\.)/, '$1')
+  if (pp) out.hgvsP = ['missense', 'nonsense', 'synonymous'].includes(pp.kind) && pp.pos && !pp.stopAt ? formatP(pp) : p.replace(/^.*?(p\.)/, '$1')
   const af = maxOf([get(best, 'MAX_AF') || get(best, 'gnomADe_AF', 'gnomADg_AF', 'gnomAD_AF')])
   if (af !== undefined && af <= 1) out.af = af
   const revel = maxOf([get(best, 'REVEL', 'REVEL_score')])
