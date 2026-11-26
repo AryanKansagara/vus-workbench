@@ -87,7 +87,7 @@ export function combine(applied: Applied[]): Combined {
     else if (a.code === 'BP4' && has('PP3')) why = 'PP3 and BP4 conflict; resolve the computational evidence first.'
     else if (a.code === 'PP3' && has('BP4')) why = 'PP3 and BP4 conflict; resolve the computational evidence first.'
     if (why) { excluded.push({ ...a, why }); continue }
-    counted.push({ ...a, points: POINTS[a.strength] * (DEF[a.code]?.dir === 'B' ? -1 : 1) })
+    counted.push({ ...a, points: POINTS[a.strength] * (a.code.startsWith('B') ? -1 : 1) }) // BP6 and PP5 are retired and not in the table, but labs still list them
   }
   // PP3 and PM1 both reflect where in the protein the change falls: together they are limited to Strong, 4 points (Pejaver et al. 2022).
   const notes: string[] = []
@@ -270,12 +270,26 @@ export const appliedOf = (list: CriterionState[]): Applied[] => list.filter(c =>
 /** "PM2_Supporting" or plain "PVS1" when used at the default strength. */
 export const critLabel = (a: Applied) => a.strength === DEF[a.code]?.strength ? a.code : `${a.code}_${a.strength}`
 
-/** Parses lab-report criteria such as "PVS1, PM2_Supporting; PP3_Mod, PS3_P, BP4_Very Strong". Unknown tokens are returned separately; a repeated code keeps its first strength. */
+const CODE_SRC = '(?:PVS1|PS[1-4]|PM[1-6]|PP[1-5]|BA1|BS[1-4]|BP[1-7])'
+const STRENGTH_SRC = '(?:StandAlone|VeryStrong|VStr|VS|Strong|Str|S|Moderate|Mod|M|Supporting|Supp|Sup|P)'
+const NOT_MET_SRC = String.raw`(?:not[ _-]*(?:met|applied|applicable|used|assessed|evaluated)|unmet|n/a)`
+
+/**
+ * Parses lab-report criteria such as "PVS1, PM2_Supporting; PP3_Mod, PS3 (Moderate), BP4_Very Strong". Codes stated as not met
+ * and tokens that are not understood are returned in `unknown`; a repeated code keeps its first strength.
+ */
 export function parseCriteria(raw: string): { applied: Applied[]; unknown: string[] } {
   const applied: Applied[] = [], unknown: string[] = []
-  const text = raw.replace(/very[ _-]strong/gi, 'VeryStrong').replace(/stand[ _-]alone/gi, 'StandAlone').replace(/[()[\]]/g, ' ')
+  let text = raw.replace(/very[ _-]strong/gi, 'VeryStrong').replace(/stand[ _-]alone/gi, 'StandAlone')
+  // "PM2 not met", "PM2 (not met)", "PM2_Supporting: not met", and "not PM2" or "no PM2".
+  const drop = (m: string) => { unknown.push(m.replace(/[()[\]]/g, ' ').replace(/\s+/g, ' ').trim()); return ' ' }
+  text = text.replace(new RegExp(String.raw`\b${CODE_SRC}(?:[ _:-]*[([]?${STRENGTH_SRC}\b[)\]]?)?[ \t]*[:=-]?[ \t]*[([]?[ \t]*${NOT_MET_SRC}(?![\w])[ \t]*[)\]]?`, 'gi'), drop)
+  text = text.replace(new RegExp(String.raw`\b(?:not|no)[ \t]+${CODE_SRC}(?:_${STRENGTH_SRC})?\b`, 'gi'), drop)
+  // A strength set apart from its code by spaces, a colon, a dash or brackets belongs to that code.
+  text = text.replace(new RegExp(String.raw`\b(${CODE_SRC})[ \t]*[:–-]?[ \t]*[([]?[ \t]*(StandAlone|VeryStrong|Strong|Moderate|Supporting|Mod|Supp|Sup)\b[)\]]?`, 'gi'), '$1_$2 ')
+  text = text.replace(/[()[\]]/g, ' ')
   for (const tok of text.split(/[,;|\s]+/).map(s => s.trim().replace(/\.$/, '')).filter(Boolean)) {
-    const m = /^(PVS1|PS[1-4]|PM[1-6]|PP[1-5]|BA1|BS[1-4]|BP[1-7])(?:[_-]?(StandAlone|VeryStrong|VStr|VS|Strong|Str|S|Moderate|Mod|M|Supporting|Supp|Sup|P))?$/i.exec(tok)
+    const m = new RegExp(`^(${CODE_SRC})(?:[_-]?(${STRENGTH_SRC}))?$`, 'i').exec(tok)
     if (!m) { unknown.push(tok); continue }
     const code = m[1].toUpperCase()
     if (applied.some(a => a.code === code)) continue
