@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { CLASSES, CLASS_SHORT, critLabel, fmtAf, vusTier, type ClassName } from './engine/acmg.ts'
+import { labVariantKey } from './engine/io.ts'
 import { phaseOf, type Evaluated } from './engine/pipeline.ts'
 import { CONSEQUENCE_LABEL } from './engine/transcript.ts'
 import { curatedCsv, geneCfg, snapshotOf, useProject, worklistCsv } from './projectData.ts'
@@ -39,7 +40,7 @@ export default function ProjectView({ id, tab, vid }: { id: string; tab: string;
       </div>
       {project.partial && <div className="banner warn">This device has the synced copy, which holds curated variants only. Re-import the VCF here to see the full worklist.</div>}
       <nav className="tabs" aria-label="Worklist sections">
-        {TABS.map(([k, l]) => <Link key={k} href={`/app/p/${project.id}${k === 'worklist' ? '' : '/' + k}`} aria-current={tab === k || (k === 'worklist' && tab === 'variant') ? 'page' : undefined}>{l}{k === 'labs' && project.labRows.length ? <span className="count">{new Set(project.labRows.map(r => r.variant)).size}</span> : null}</Link>)}
+        {TABS.map(([k, l]) => <Link key={k} href={`/app/p/${project.id}${k === 'worklist' ? '' : '/' + k}`} aria-current={tab === k || (k === 'worklist' && tab === 'variant') ? 'page' : undefined}>{l}{k === 'labs' && project.labRows.length ? <span className="count">{new Set(project.labRows.map(r => labVariantKey(r.variant, r.gene))).size}</span> : null}</Link>)}
       </nav>
       <Suspense fallback={<div className="boot" role="status"><span className="spinner" /> Loading</div>}>
         {tab === 'worklist' && <Worklist project={project} evaluated={evaluated} />}
